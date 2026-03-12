@@ -2,9 +2,9 @@ name: Build
 
 on:
   push:
-    branches: [main, master]
+    branches: [master]
   pull_request:
-    branches: [main, master]
+    branches: [master]
 
 jobs:
   build:
@@ -51,7 +51,7 @@ jobs:
         if: ${{ !contains(matrix.target, 'aarch64') || matrix.os == 'macos-latest' }}
         run: cargo test --target ${{ matrix.target }}
 
-      - name: Upload binary (Unix)
+      - name: Upload artifact (Unix)
         if: runner.os != 'Windows'
         uses: actions/upload-artifact@v5
         with:
@@ -59,10 +59,52 @@ jobs:
           path: target/${{ matrix.target }}/release/remote-agent
           if-no-files-found: error
 
-      - name: Upload binary (Windows)
+      - name: Upload artifact (Windows)
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v5
         with:
           name: remote-agent-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/remote-agent.exe
           if-no-files-found: error
+
+  release:
+    needs: build
+    if: contains(github.event.head_commit.message, '[release]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Extract version from Cargo.toml
+        id: version
+        run: |
+          VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v5
+        with:
+          path: artifacts
+
+      - name: Prepare release binaries
+        run: |
+          mkdir -p release
+          for dir in artifacts/remote-agent-*/; do
+            target=$(basename "$dir" | sed 's/^remote-agent-//')
+            if ls "$dir"/*.exe 1>/dev/null 2>&1; then
+              cp "$dir"/remote-agent.exe "release/remote-agent-${target}.exe"
+            else
+              cp "$dir"/remote-agent "release/remote-agent-${target}"
+            fi
+          done
+          ls -la release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          files: release/*
