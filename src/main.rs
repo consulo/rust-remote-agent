@@ -52,7 +52,7 @@ fn default_workspace() -> String {
 #[command(name = "rust-remote-agent", version, about = "Remote agent for Consulo IDE")]
 struct Cli {
     /// Host address to bind to
-    #[arg(long, default_value = "127.0.0.1")]
+    #[arg(long, default_value = "0.0.0.0")]
     host: String,
 
     /// Port to listen on
