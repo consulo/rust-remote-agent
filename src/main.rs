@@ -68,6 +68,16 @@ struct Cli {
     daemon: bool,
 }
 
+/// Detect the local LAN IP by opening a UDP socket to a public address.
+/// No actual traffic is sent — the OS just picks the right local interface.
+fn detect_local_ip() -> Option<String> {
+    use std::net::UdpSocket;
+    let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    let addr = socket.local_addr().ok()?;
+    Some(addr.ip().to_string())
+}
+
 fn main() {
     env_logger::init();
     let cli = Cli::parse();
@@ -86,9 +96,13 @@ fn main() {
         std::process::exit(1);
     }
 
+    let local_ip = detect_local_ip().unwrap_or_else(|| "unknown".to_string());
+
     log::info!("Starting remote-agent on {} (platform: {}, workspace: {})", listen_addr, platform::platform_label(), workspace);
     println!("rust-remote-agent v{}", env!("CARGO_PKG_VERSION"));
-    println!("listening on {} (platform: {})", listen_addr, platform::platform_label());
+    println!("platform: {}", platform::platform_label());
+    println!("listening on {}", listen_addr);
+    println!("connect via: {}:{}", local_ip, cli.port);
     println!("workspace: {}", workspace);
 
     // Flush stdout before server.listen() blocks
