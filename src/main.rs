@@ -27,8 +27,29 @@ use crate::service::AgentServiceHandler;
 
 const DEFAULT_PORT: u16 = 57638;
 
+fn default_workspace() -> String {
+    #[cfg(windows)]
+    {
+        // %LOCALAPPDATA%\consulo-workspace or C:\consulo-workspace
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            format!("{}\\consulo-workspace", local)
+        } else {
+            "C:\\consulo-workspace".to_string()
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        // ~/consulo-workspace — user-writable, no root needed
+        if let Ok(home) = std::env::var("HOME") {
+            format!("{}/consulo-workspace", home)
+        } else {
+            "/tmp/consulo-workspace".to_string()
+        }
+    }
+}
+
 #[derive(Parser)]
-#[command(name = "remote-agent", about = "Remote agent for Consulo IDE")]
+#[command(name = "rust-remote-agent", version, about = "Remote agent for Consulo IDE")]
 struct Cli {
     /// Host address to bind to
     #[arg(long, default_value = "127.0.0.1")]
@@ -37,6 +58,10 @@ struct Cli {
     /// Port to listen on
     #[arg(long, default_value_t = DEFAULT_PORT)]
     port: u16,
+
+    /// Workspace root directory
+    #[arg(long, default_value_t = default_workspace())]
+    workspace: String,
 
     /// Run as a background daemon
     #[arg(long)]
@@ -53,10 +78,24 @@ fn main() {
     }
 
     let listen_addr = format!("{}:{}", cli.host, cli.port);
-    log::info!("Starting remote-agent on {} (platform: {})", listen_addr, platform::platform_label());
-    println!("remote-agent listening on {} (platform: {})", listen_addr, platform::platform_label());
+    let workspace = cli.workspace;
 
-    let handler = AgentServiceHandler::new();
+    // Ensure workspace directory exists
+    if let Err(e) = std::fs::create_dir_all(&workspace) {
+        eprintln!("Failed to create workspace '{}': {}", workspace, e);
+        std::process::exit(1);
+    }
+
+    log::info!("Starting remote-agent on {} (platform: {}, workspace: {})", listen_addr, platform::platform_label(), workspace);
+    println!("rust-remote-agent v{}", env!("CARGO_PKG_VERSION"));
+    println!("listening on {} (platform: {})", listen_addr, platform::platform_label());
+    println!("workspace: {}", workspace);
+
+    // Flush stdout before server.listen() blocks
+    use std::io::Write;
+    let _ = std::io::stdout().flush();
+
+    let handler = AgentServiceHandler::new(workspace);
     let processor = RemoteAgentServiceSyncProcessor::new(handler);
 
     let input_transport_factory = TBufferedReadTransportFactory::new();

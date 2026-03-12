@@ -101,6 +101,11 @@ service RemoteAgentService {
 
     AgentInfo getAgentInfo(),
 
+    // --- Workspace ---
+
+    // Returns the workspace root directory path.
+    string getWorkspacePath(),
+
     // --- Process Management ---
 
     ProcessInfo startProcess(
@@ -158,6 +163,13 @@ service RemoteAgentService {
     ) throws (1: AgentException error),
 
     list<FileInfo> listRoots(),
+
+    // Set POSIX permissions (octal mode, e.g. 0755).
+    // On Windows this is a no-op that returns false.
+    bool setPermissions(
+        1: required string path,
+        2: required i32 mode
+    ) throws (1: AgentException error),
 
     // --- File Transfer (chunked) ---
 

@@ -764,6 +764,7 @@ impl TSerializable for AgentInfo {
 
 pub trait TRemoteAgentServiceSyncClient {
   fn get_agent_info(&mut self) -> thrift::Result<AgentInfo>;
+  fn get_workspace_path(&mut self) -> thrift::Result<String>;
   fn start_process(&mut self, command: String, args: Vec<String>, working_directory: String, environment: BTreeMap<String, String>) -> thrift::Result<ProcessInfo>;
   fn kill_process(&mut self, pid: i64, force: bool) -> thrift::Result<bool>;
   fn is_process_alive(&mut self, pid: i64) -> thrift::Result<bool>;
@@ -776,6 +777,7 @@ pub trait TRemoteAgentServiceSyncClient {
   fn file_exists(&mut self, path: String) -> thrift::Result<bool>;
   fn create_directory(&mut self, path: String, recursive: bool) -> thrift::Result<()>;
   fn list_roots(&mut self) -> thrift::Result<Vec<FileInfo>>;
+  fn set_permissions(&mut self, path: String, mode: i32) -> thrift::Result<bool>;
   fn begin_upload(&mut self, path: String, file_size: i64) -> thrift::Result<String>;
   fn upload_chunk(&mut self, transfer_id: String, data: Vec<u8>) -> thrift::Result<()>;
   fn finish_upload(&mut self, transfer_id: String) -> thrift::Result<()>;
@@ -836,6 +838,33 @@ impl <C: TThriftClient + TRemoteAgentServiceSyncClientMarker> TRemoteAgentServic
       }
       verify_expected_message_type(TMessageType::Reply, message_ident.message_type)?;
       let result = RemoteAgentServiceGetAgentInfoResult::read_from_in_protocol(self.i_prot_mut())?;
+      self.i_prot_mut().read_message_end()?;
+      result.ok_or()
+    }
+  }
+  fn get_workspace_path(&mut self) -> thrift::Result<String> {
+    (
+      {
+        self.increment_sequence_number();
+        let message_ident = TMessageIdentifier::new("getWorkspacePath", TMessageType::Call, self.sequence_number());
+        let call_args = RemoteAgentServiceGetWorkspacePathArgs {  };
+        self.o_prot_mut().write_message_begin(&message_ident)?;
+        call_args.write_to_out_protocol(self.o_prot_mut())?;
+        self.o_prot_mut().write_message_end()?;
+        self.o_prot_mut().flush()
+      }
+    )?;
+    {
+      let message_ident = self.i_prot_mut().read_message_begin()?;
+      verify_expected_sequence_number(self.sequence_number(), message_ident.sequence_number)?;
+      verify_expected_service_call("getWorkspacePath", &message_ident.name)?;
+      if message_ident.message_type == TMessageType::Exception {
+        let remote_error = thrift::Error::read_application_error_from_in_protocol(self.i_prot_mut())?;
+        self.i_prot_mut().read_message_end()?;
+        return Err(thrift::Error::Application(remote_error))
+      }
+      verify_expected_message_type(TMessageType::Reply, message_ident.message_type)?;
+      let result = RemoteAgentServiceGetWorkspacePathResult::read_from_in_protocol(self.i_prot_mut())?;
       self.i_prot_mut().read_message_end()?;
       result.ok_or()
     }
@@ -1164,6 +1193,33 @@ impl <C: TThriftClient + TRemoteAgentServiceSyncClientMarker> TRemoteAgentServic
       result.ok_or()
     }
   }
+  fn set_permissions(&mut self, path: String, mode: i32) -> thrift::Result<bool> {
+    (
+      {
+        self.increment_sequence_number();
+        let message_ident = TMessageIdentifier::new("setPermissions", TMessageType::Call, self.sequence_number());
+        let call_args = RemoteAgentServiceSetPermissionsArgs { path, mode };
+        self.o_prot_mut().write_message_begin(&message_ident)?;
+        call_args.write_to_out_protocol(self.o_prot_mut())?;
+        self.o_prot_mut().write_message_end()?;
+        self.o_prot_mut().flush()
+      }
+    )?;
+    {
+      let message_ident = self.i_prot_mut().read_message_begin()?;
+      verify_expected_sequence_number(self.sequence_number(), message_ident.sequence_number)?;
+      verify_expected_service_call("setPermissions", &message_ident.name)?;
+      if message_ident.message_type == TMessageType::Exception {
+        let remote_error = thrift::Error::read_application_error_from_in_protocol(self.i_prot_mut())?;
+        self.i_prot_mut().read_message_end()?;
+        return Err(thrift::Error::Application(remote_error))
+      }
+      verify_expected_message_type(TMessageType::Reply, message_ident.message_type)?;
+      let result = RemoteAgentServiceSetPermissionsResult::read_from_in_protocol(self.i_prot_mut())?;
+      self.i_prot_mut().read_message_end()?;
+      result.ok_or()
+    }
+  }
   fn begin_upload(&mut self, path: String, file_size: i64) -> thrift::Result<String> {
     (
       {
@@ -1469,6 +1525,7 @@ impl <C: TThriftClient + TRemoteAgentServiceSyncClientMarker> TRemoteAgentServic
 
 pub trait RemoteAgentServiceSyncHandler {
   fn handle_get_agent_info(&self) -> thrift::Result<AgentInfo>;
+  fn handle_get_workspace_path(&self) -> thrift::Result<String>;
   fn handle_start_process(&self, command: String, args: Vec<String>, working_directory: String, environment: BTreeMap<String, String>) -> thrift::Result<ProcessInfo>;
   fn handle_kill_process(&self, pid: i64, force: bool) -> thrift::Result<bool>;
   fn handle_is_process_alive(&self, pid: i64) -> thrift::Result<bool>;
@@ -1481,6 +1538,7 @@ pub trait RemoteAgentServiceSyncHandler {
   fn handle_file_exists(&self, path: String) -> thrift::Result<bool>;
   fn handle_create_directory(&self, path: String, recursive: bool) -> thrift::Result<()>;
   fn handle_list_roots(&self) -> thrift::Result<Vec<FileInfo>>;
+  fn handle_set_permissions(&self, path: String, mode: i32) -> thrift::Result<bool>;
   fn handle_begin_upload(&self, path: String, file_size: i64) -> thrift::Result<String>;
   fn handle_upload_chunk(&self, transfer_id: String, data: Vec<u8>) -> thrift::Result<()>;
   fn handle_finish_upload(&self, transfer_id: String) -> thrift::Result<()>;
@@ -1506,6 +1564,9 @@ impl <H: RemoteAgentServiceSyncHandler> RemoteAgentServiceSyncProcessor<H> {
   }
   fn process_get_agent_info(&self, incoming_sequence_number: i32, i_prot: &mut dyn TInputProtocol, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
     TRemoteAgentServiceProcessFunctions::process_get_agent_info(&self.handler, incoming_sequence_number, i_prot, o_prot)
+  }
+  fn process_get_workspace_path(&self, incoming_sequence_number: i32, i_prot: &mut dyn TInputProtocol, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
+    TRemoteAgentServiceProcessFunctions::process_get_workspace_path(&self.handler, incoming_sequence_number, i_prot, o_prot)
   }
   fn process_start_process(&self, incoming_sequence_number: i32, i_prot: &mut dyn TInputProtocol, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
     TRemoteAgentServiceProcessFunctions::process_start_process(&self.handler, incoming_sequence_number, i_prot, o_prot)
@@ -1542,6 +1603,9 @@ impl <H: RemoteAgentServiceSyncHandler> RemoteAgentServiceSyncProcessor<H> {
   }
   fn process_list_roots(&self, incoming_sequence_number: i32, i_prot: &mut dyn TInputProtocol, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
     TRemoteAgentServiceProcessFunctions::process_list_roots(&self.handler, incoming_sequence_number, i_prot, o_prot)
+  }
+  fn process_set_permissions(&self, incoming_sequence_number: i32, i_prot: &mut dyn TInputProtocol, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
+    TRemoteAgentServiceProcessFunctions::process_set_permissions(&self.handler, incoming_sequence_number, i_prot, o_prot)
   }
   fn process_begin_upload(&self, incoming_sequence_number: i32, i_prot: &mut dyn TInputProtocol, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
     TRemoteAgentServiceProcessFunctions::process_begin_upload(&self.handler, incoming_sequence_number, i_prot, o_prot)
@@ -1609,6 +1673,43 @@ impl TRemoteAgentServiceProcessFunctions {
               )
             };
             let message_ident = TMessageIdentifier::new("getAgentInfo", TMessageType::Exception, incoming_sequence_number);
+            o_prot.write_message_begin(&message_ident)?;
+            thrift::Error::write_application_error_to_out_protocol(&ret_err, o_prot)?;
+            o_prot.write_message_end()?;
+            o_prot.flush()
+          },
+        }
+      },
+    }
+  }
+  pub fn process_get_workspace_path<H: RemoteAgentServiceSyncHandler>(handler: &H, incoming_sequence_number: i32, i_prot: &mut dyn TInputProtocol, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
+    let _ = RemoteAgentServiceGetWorkspacePathArgs::read_from_in_protocol(i_prot)?;
+    match handler.handle_get_workspace_path() {
+      Ok(handler_return) => {
+        let message_ident = TMessageIdentifier::new("getWorkspacePath", TMessageType::Reply, incoming_sequence_number);
+        o_prot.write_message_begin(&message_ident)?;
+        let ret = RemoteAgentServiceGetWorkspacePathResult { result_value: Some(handler_return) };
+        ret.write_to_out_protocol(o_prot)?;
+        o_prot.write_message_end()?;
+        o_prot.flush()
+      },
+      Err(e) => {
+        match e {
+          thrift::Error::Application(app_err) => {
+            let message_ident = TMessageIdentifier::new("getWorkspacePath", TMessageType::Exception, incoming_sequence_number);
+            o_prot.write_message_begin(&message_ident)?;
+            thrift::Error::write_application_error_to_out_protocol(&app_err, o_prot)?;
+            o_prot.write_message_end()?;
+            o_prot.flush()
+          },
+          _ => {
+            let ret_err = {
+              ApplicationError::new(
+                ApplicationErrorKind::Unknown,
+                e.to_string()
+              )
+            };
+            let message_ident = TMessageIdentifier::new("getWorkspacePath", TMessageType::Exception, incoming_sequence_number);
             o_prot.write_message_begin(&message_ident)?;
             thrift::Error::write_application_error_to_out_protocol(&ret_err, o_prot)?;
             o_prot.write_message_end()?;
@@ -2246,6 +2347,66 @@ impl TRemoteAgentServiceProcessFunctions {
       },
     }
   }
+  pub fn process_set_permissions<H: RemoteAgentServiceSyncHandler>(handler: &H, incoming_sequence_number: i32, i_prot: &mut dyn TInputProtocol, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
+    let args = RemoteAgentServiceSetPermissionsArgs::read_from_in_protocol(i_prot)?;
+    match handler.handle_set_permissions(args.path, args.mode) {
+      Ok(handler_return) => {
+        let message_ident = TMessageIdentifier::new("setPermissions", TMessageType::Reply, incoming_sequence_number);
+        o_prot.write_message_begin(&message_ident)?;
+        let ret = RemoteAgentServiceSetPermissionsResult { result_value: Some(handler_return), error: None };
+        ret.write_to_out_protocol(o_prot)?;
+        o_prot.write_message_end()?;
+        o_prot.flush()
+      },
+      Err(e) => {
+        match e {
+          thrift::Error::User(usr_err) => {
+            if usr_err.downcast_ref::<AgentException>().is_some() {
+              let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceSetPermissionsResult{ result_value: None, error: Some(*err) };
+              let message_ident = TMessageIdentifier::new("setPermissions", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else {
+              let ret_err = {
+                ApplicationError::new(
+                  ApplicationErrorKind::Unknown,
+                  usr_err.to_string()
+                )
+              };
+              let message_ident = TMessageIdentifier::new("setPermissions", TMessageType::Exception, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              thrift::Error::write_application_error_to_out_protocol(&ret_err, o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            }
+          },
+          thrift::Error::Application(app_err) => {
+            let message_ident = TMessageIdentifier::new("setPermissions", TMessageType::Exception, incoming_sequence_number);
+            o_prot.write_message_begin(&message_ident)?;
+            thrift::Error::write_application_error_to_out_protocol(&app_err, o_prot)?;
+            o_prot.write_message_end()?;
+            o_prot.flush()
+          },
+          _ => {
+            let ret_err = {
+              ApplicationError::new(
+                ApplicationErrorKind::Unknown,
+                e.to_string()
+              )
+            };
+            let message_ident = TMessageIdentifier::new("setPermissions", TMessageType::Exception, incoming_sequence_number);
+            o_prot.write_message_begin(&message_ident)?;
+            thrift::Error::write_application_error_to_out_protocol(&ret_err, o_prot)?;
+            o_prot.write_message_end()?;
+            o_prot.flush()
+          },
+        }
+      },
+    }
+  }
   pub fn process_begin_upload<H: RemoteAgentServiceSyncHandler>(handler: &H, incoming_sequence_number: i32, i_prot: &mut dyn TInputProtocol, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
     let args = RemoteAgentServiceBeginUploadArgs::read_from_in_protocol(i_prot)?;
     match handler.handle_begin_upload(args.path, args.file_size) {
@@ -2823,6 +2984,9 @@ impl <H: RemoteAgentServiceSyncHandler> TProcessor for RemoteAgentServiceSyncPro
       "getAgentInfo" => {
         self.process_get_agent_info(message_ident.sequence_number, i_prot, o_prot)
       },
+      "getWorkspacePath" => {
+        self.process_get_workspace_path(message_ident.sequence_number, i_prot, o_prot)
+      },
       "startProcess" => {
         self.process_start_process(message_ident.sequence_number, i_prot, o_prot)
       },
@@ -2858,6 +3022,9 @@ impl <H: RemoteAgentServiceSyncHandler> TProcessor for RemoteAgentServiceSyncPro
       },
       "listRoots" => {
         self.process_list_roots(message_ident.sequence_number, i_prot, o_prot)
+      },
+      "setPermissions" => {
+        self.process_set_permissions(message_ident.sequence_number, i_prot, o_prot)
       },
       "beginUpload" => {
         self.process_begin_upload(message_ident.sequence_number, i_prot, o_prot)
@@ -2994,6 +3161,100 @@ impl RemoteAgentServiceGetAgentInfoResult {
     if let Some(ref fld_var) = self.result_value {
       o_prot.write_field_begin(&TFieldIdentifier::new("result_value", TType::Struct, 0))?;
       fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    o_prot.write_field_stop()?;
+    o_prot.write_struct_end()
+  }
+}
+
+//
+// RemoteAgentServiceGetWorkspacePathArgs
+//
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+struct RemoteAgentServiceGetWorkspacePathArgs {
+}
+
+impl RemoteAgentServiceGetWorkspacePathArgs {
+  fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<RemoteAgentServiceGetWorkspacePathArgs> {
+    i_prot.read_struct_begin()?;
+    loop {
+      let field_ident = i_prot.read_field_begin()?;
+      if field_ident.field_type == TType::Stop {
+        break;
+      }
+      i_prot.skip(field_ident.field_type)?;
+      i_prot.read_field_end()?;
+    }
+    i_prot.read_struct_end()?;
+    let ret = RemoteAgentServiceGetWorkspacePathArgs {};
+    Ok(ret)
+  }
+  fn write_to_out_protocol(&self, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
+    let struct_ident = TStructIdentifier::new("getWorkspacePath_args");
+    o_prot.write_struct_begin(&struct_ident)?;
+    o_prot.write_field_stop()?;
+    o_prot.write_struct_end()
+  }
+}
+
+//
+// RemoteAgentServiceGetWorkspacePathResult
+//
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+struct RemoteAgentServiceGetWorkspacePathResult {
+  result_value: Option<String>,
+}
+
+impl RemoteAgentServiceGetWorkspacePathResult {
+  fn ok_or(self) -> thrift::Result<String> {
+    if self.result_value.is_some() {
+      Ok(self.result_value.unwrap())
+    } else {
+      Err(
+        thrift::Error::Application(
+          ApplicationError::new(
+            ApplicationErrorKind::MissingResult,
+            "no result received for RemoteAgentServiceGetWorkspacePath"
+          )
+        )
+      )
+    }
+  }
+  fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<RemoteAgentServiceGetWorkspacePathResult> {
+    i_prot.read_struct_begin()?;
+    let mut f_0: Option<String> = None;
+    loop {
+      let field_ident = i_prot.read_field_begin()?;
+      if field_ident.field_type == TType::Stop {
+        break;
+      }
+      let field_id = field_id(&field_ident)?;
+      match field_id {
+        0 => {
+          let val = i_prot.read_string()?;
+          f_0 = Some(val);
+        },
+        _ => {
+          i_prot.skip(field_ident.field_type)?;
+        },
+      };
+      i_prot.read_field_end()?;
+    }
+    i_prot.read_struct_end()?;
+    let ret = RemoteAgentServiceGetWorkspacePathResult {
+      result_value: f_0,
+    };
+    Ok(ret)
+  }
+  fn write_to_out_protocol(&self, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
+    let struct_ident = TStructIdentifier::new("RemoteAgentServiceGetWorkspacePathResult");
+    o_prot.write_struct_begin(&struct_ident)?;
+    if let Some(ref fld_var) = self.result_value {
+      o_prot.write_field_begin(&TFieldIdentifier::new("result_value", TType::String, 0))?;
+      o_prot.write_string(fld_var)?;
       o_prot.write_field_end()?
     }
     o_prot.write_field_stop()?;
@@ -4480,6 +4741,142 @@ impl RemoteAgentServiceListRootsResult {
         e.write_to_out_protocol(o_prot)?;
       }
       o_prot.write_list_end()?;
+      o_prot.write_field_end()?
+    }
+    o_prot.write_field_stop()?;
+    o_prot.write_struct_end()
+  }
+}
+
+//
+// RemoteAgentServiceSetPermissionsArgs
+//
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+struct RemoteAgentServiceSetPermissionsArgs {
+  path: String,
+  mode: i32,
+}
+
+impl RemoteAgentServiceSetPermissionsArgs {
+  fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<RemoteAgentServiceSetPermissionsArgs> {
+    i_prot.read_struct_begin()?;
+    let mut f_1: Option<String> = None;
+    let mut f_2: Option<i32> = None;
+    loop {
+      let field_ident = i_prot.read_field_begin()?;
+      if field_ident.field_type == TType::Stop {
+        break;
+      }
+      let field_id = field_id(&field_ident)?;
+      match field_id {
+        1 => {
+          let val = i_prot.read_string()?;
+          f_1 = Some(val);
+        },
+        2 => {
+          let val = i_prot.read_i32()?;
+          f_2 = Some(val);
+        },
+        _ => {
+          i_prot.skip(field_ident.field_type)?;
+        },
+      };
+      i_prot.read_field_end()?;
+    }
+    i_prot.read_struct_end()?;
+    verify_required_field_exists("RemoteAgentServiceSetPermissionsArgs.path", &f_1)?;
+    verify_required_field_exists("RemoteAgentServiceSetPermissionsArgs.mode", &f_2)?;
+    let ret = RemoteAgentServiceSetPermissionsArgs {
+      path: f_1.expect("auto-generated code should have checked for presence of required fields"),
+      mode: f_2.expect("auto-generated code should have checked for presence of required fields"),
+    };
+    Ok(ret)
+  }
+  fn write_to_out_protocol(&self, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
+    let struct_ident = TStructIdentifier::new("setPermissions_args");
+    o_prot.write_struct_begin(&struct_ident)?;
+    o_prot.write_field_begin(&TFieldIdentifier::new("path", TType::String, 1))?;
+    o_prot.write_string(&self.path)?;
+    o_prot.write_field_end()?;
+    o_prot.write_field_begin(&TFieldIdentifier::new("mode", TType::I32, 2))?;
+    o_prot.write_i32(self.mode)?;
+    o_prot.write_field_end()?;
+    o_prot.write_field_stop()?;
+    o_prot.write_struct_end()
+  }
+}
+
+//
+// RemoteAgentServiceSetPermissionsResult
+//
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+struct RemoteAgentServiceSetPermissionsResult {
+  result_value: Option<bool>,
+  error: Option<AgentException>,
+}
+
+impl RemoteAgentServiceSetPermissionsResult {
+  fn ok_or(self) -> thrift::Result<bool> {
+    if self.error.is_some() {
+      Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.result_value.is_some() {
+      Ok(self.result_value.unwrap())
+    } else {
+      Err(
+        thrift::Error::Application(
+          ApplicationError::new(
+            ApplicationErrorKind::MissingResult,
+            "no result received for RemoteAgentServiceSetPermissions"
+          )
+        )
+      )
+    }
+  }
+  fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<RemoteAgentServiceSetPermissionsResult> {
+    i_prot.read_struct_begin()?;
+    let mut f_0: Option<bool> = None;
+    let mut f_1: Option<AgentException> = None;
+    loop {
+      let field_ident = i_prot.read_field_begin()?;
+      if field_ident.field_type == TType::Stop {
+        break;
+      }
+      let field_id = field_id(&field_ident)?;
+      match field_id {
+        0 => {
+          let val = i_prot.read_bool()?;
+          f_0 = Some(val);
+        },
+        1 => {
+          let val = AgentException::read_from_in_protocol(i_prot)?;
+          f_1 = Some(val);
+        },
+        _ => {
+          i_prot.skip(field_ident.field_type)?;
+        },
+      };
+      i_prot.read_field_end()?;
+    }
+    i_prot.read_struct_end()?;
+    let ret = RemoteAgentServiceSetPermissionsResult {
+      result_value: f_0,
+      error: f_1,
+    };
+    Ok(ret)
+  }
+  fn write_to_out_protocol(&self, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
+    let struct_ident = TStructIdentifier::new("RemoteAgentServiceSetPermissionsResult");
+    o_prot.write_struct_begin(&struct_ident)?;
+    if let Some(fld_var) = self.result_value {
+      o_prot.write_field_begin(&TFieldIdentifier::new("result_value", TType::Bool, 0))?;
+      o_prot.write_bool(fld_var)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
     o_prot.write_field_stop()?;

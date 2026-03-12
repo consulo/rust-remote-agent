@@ -18,13 +18,15 @@ use crate::generated::remote_agent::*;
 use crate::handler;
 
 pub struct AgentServiceHandler {
+    workspace: String,
     process_manager: handler::process::ProcessManager,
     transfer_manager: handler::transfer::TransferManager,
 }
 
 impl AgentServiceHandler {
-    pub fn new() -> Self {
+    pub fn new(workspace: String) -> Self {
         AgentServiceHandler {
+            workspace,
             process_manager: handler::process::ProcessManager::new(),
             transfer_manager: handler::transfer::TransferManager::new(),
         }
@@ -39,6 +41,12 @@ impl RemoteAgentServiceSyncHandler for AgentServiceHandler {
             "rust-remote-agent".to_string(),
             env!("CARGO_PKG_VERSION").to_string(),
         ))
+    }
+
+    // --- Workspace ---
+
+    fn handle_get_workspace_path(&self) -> thrift::Result<String> {
+        Ok(self.workspace.clone())
     }
 
     // --- Process Management ---
@@ -98,6 +106,10 @@ impl RemoteAgentServiceSyncHandler for AgentServiceHandler {
 
     fn handle_list_roots(&self) -> thrift::Result<Vec<FileInfo>> {
         Ok(handler::file::list_roots())
+    }
+
+    fn handle_set_permissions(&self, path: String, mode: i32) -> thrift::Result<bool> {
+        handler::file::set_permissions(&path, mode)
     }
 
     // --- File Transfer (chunked) ---

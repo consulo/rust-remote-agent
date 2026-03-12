@@ -157,6 +157,22 @@ pub fn create_directory(path: &str, recursive: bool) -> thrift::Result<()> {
     result.map_err(|e| agent_err(format!("Failed to create directory '{}': {}", path, e)))
 }
 
+pub fn set_permissions(path: &str, mode: i32) -> thrift::Result<bool> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = fs::Permissions::from_mode(mode as u32);
+        fs::set_permissions(path, perms)
+            .map(|()| true)
+            .map_err(|e| agent_err(format!("Failed to set permissions on '{}': {}", path, e)))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (path, mode);
+        Ok(false)
+    }
+}
+
 // --- Platform-specific helpers ---
 
 #[cfg(windows)]
