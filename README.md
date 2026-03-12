@@ -8,12 +8,12 @@ Pre-built binaries are available on the [Releases](https://github.com/consulo/ru
 
 | Platform | Architecture | Download |
 |----------|-------------|----------|
-| Linux | x86_64 | [remote-agent-x86_64-unknown-linux-gnu](https://github.com/consulo/rust-remote-agent/releases/latest/download/remote-agent-x86_64-unknown-linux-gnu) |
-| Linux | aarch64 | [remote-agent-aarch64-unknown-linux-gnu](https://github.com/consulo/rust-remote-agent/releases/latest/download/remote-agent-aarch64-unknown-linux-gnu) |
-| macOS | x86_64 | [remote-agent-x86_64-apple-darwin](https://github.com/consulo/rust-remote-agent/releases/latest/download/remote-agent-x86_64-apple-darwin) |
-| macOS | aarch64 (Apple Silicon) | [remote-agent-aarch64-apple-darwin](https://github.com/consulo/rust-remote-agent/releases/latest/download/remote-agent-aarch64-apple-darwin) |
-| Windows | x86_64 | [remote-agent-x86_64-pc-windows-msvc.exe](https://github.com/consulo/rust-remote-agent/releases/latest/download/remote-agent-x86_64-pc-windows-msvc.exe) |
-| Windows | aarch64 | [remote-agent-aarch64-pc-windows-msvc.exe](https://github.com/consulo/rust-remote-agent/releases/latest/download/remote-agent-aarch64-pc-windows-msvc.exe) |
+| Linux | x86_64 | [tar.gz](https://github.com/consulo/rust-remote-agent/releases/latest/download/remote-agent-x86_64-unknown-linux-gnu.tar.gz) |
+| Linux | aarch64 | [tar.gz](https://github.com/consulo/rust-remote-agent/releases/latest/download/remote-agent-aarch64-unknown-linux-gnu.tar.gz) |
+| macOS | x86_64 | [tar.gz](https://github.com/consulo/rust-remote-agent/releases/latest/download/remote-agent-x86_64-apple-darwin.tar.gz) |
+| macOS | aarch64 (Apple Silicon) | [tar.gz](https://github.com/consulo/rust-remote-agent/releases/latest/download/remote-agent-aarch64-apple-darwin.tar.gz) |
+| Windows | x86_64 | [zip](https://github.com/consulo/rust-remote-agent/releases/latest/download/remote-agent-x86_64-pc-windows-msvc.zip) |
+| Windows | aarch64 | [zip](https://github.com/consulo/rust-remote-agent/releases/latest/download/remote-agent-aarch64-pc-windows-msvc.zip) |
 
 ## Build
 

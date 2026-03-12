@@ -88,17 +88,24 @@ jobs:
         with:
           path: artifacts
 
-      - name: Prepare release binaries
+      - name: Package release archives
         run: |
-          mkdir -p release
+          mkdir -p release pkg
           for dir in artifacts/remote-agent-*/; do
             target=$(basename "$dir" | sed 's/^remote-agent-//')
+            rm -rf pkg/*
             if ls "$dir"/*.exe 1>/dev/null 2>&1; then
-              cp "$dir"/remote-agent.exe "release/remote-agent-${target}.exe"
+              # Windows: zip with binary named remote-agent.exe
+              cp "$dir"/remote-agent.exe pkg/remote-agent.exe
+              (cd pkg && zip ../release/remote-agent-${target}.zip remote-agent.exe)
             else
-              cp "$dir"/remote-agent "release/remote-agent-${target}"
+              # Unix (Linux/macOS): tar.gz with binary named remote-agent
+              cp "$dir"/remote-agent pkg/remote-agent
+              chmod +x pkg/remote-agent
+              tar czf "release/remote-agent-${target}.tar.gz" -C pkg remote-agent
             fi
           done
+          rm -rf pkg
           ls -la release/
 
       - name: Create GitHub Release
