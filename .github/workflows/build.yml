@@ -27,7 +27,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -53,7 +53,7 @@ jobs:
 
       - name: Upload binary (Unix)
         if: runner.os != 'Windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: remote-agent-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/remote-agent
@@ -61,7 +61,7 @@ jobs:
 
       - name: Upload binary (Windows)
         if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: remote-agent-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/remote-agent.exe
