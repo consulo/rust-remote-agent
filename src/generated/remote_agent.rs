@@ -518,10 +518,12 @@ pub struct SystemInfo {
   pub hostname: String,
   pub cpu_count: i32,
   pub total_memory: i64,
+  pub console_encoding: String,
+  pub locale: String,
 }
 
 impl SystemInfo {
-  pub fn new(os_name: String, os_version: String, arch: String, hostname: String, cpu_count: i32, total_memory: i64) -> SystemInfo {
+  pub fn new(os_name: String, os_version: String, arch: String, hostname: String, cpu_count: i32, total_memory: i64, console_encoding: String, locale: String) -> SystemInfo {
     SystemInfo {
       os_name,
       os_version,
@@ -529,6 +531,8 @@ impl SystemInfo {
       hostname,
       cpu_count,
       total_memory,
+      console_encoding,
+      locale,
     }
   }
 }
@@ -542,6 +546,8 @@ impl TSerializable for SystemInfo {
     let mut f_4: Option<String> = None;
     let mut f_5: Option<i32> = None;
     let mut f_6: Option<i64> = None;
+    let mut f_7: Option<String> = None;
+    let mut f_8: Option<String> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -573,6 +579,14 @@ impl TSerializable for SystemInfo {
           let val = i_prot.read_i64()?;
           f_6 = Some(val);
         },
+        7 => {
+          let val = i_prot.read_string()?;
+          f_7 = Some(val);
+        },
+        8 => {
+          let val = i_prot.read_string()?;
+          f_8 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -586,6 +600,8 @@ impl TSerializable for SystemInfo {
     verify_required_field_exists("SystemInfo.hostname", &f_4)?;
     verify_required_field_exists("SystemInfo.cpu_count", &f_5)?;
     verify_required_field_exists("SystemInfo.total_memory", &f_6)?;
+    verify_required_field_exists("SystemInfo.console_encoding", &f_7)?;
+    verify_required_field_exists("SystemInfo.locale", &f_8)?;
     let ret = SystemInfo {
       os_name: f_1.expect("auto-generated code should have checked for presence of required fields"),
       os_version: f_2.expect("auto-generated code should have checked for presence of required fields"),
@@ -593,6 +609,8 @@ impl TSerializable for SystemInfo {
       hostname: f_4.expect("auto-generated code should have checked for presence of required fields"),
       cpu_count: f_5.expect("auto-generated code should have checked for presence of required fields"),
       total_memory: f_6.expect("auto-generated code should have checked for presence of required fields"),
+      console_encoding: f_7.expect("auto-generated code should have checked for presence of required fields"),
+      locale: f_8.expect("auto-generated code should have checked for presence of required fields"),
     };
     Ok(ret)
   }
@@ -616,6 +634,12 @@ impl TSerializable for SystemInfo {
     o_prot.write_field_end()?;
     o_prot.write_field_begin(&TFieldIdentifier::new("totalMemory", TType::I64, 6))?;
     o_prot.write_i64(self.total_memory)?;
+    o_prot.write_field_end()?;
+    o_prot.write_field_begin(&TFieldIdentifier::new("consoleEncoding", TType::String, 7))?;
+    o_prot.write_string(&self.console_encoding)?;
+    o_prot.write_field_end()?;
+    o_prot.write_field_begin(&TFieldIdentifier::new("locale", TType::String, 8))?;
+    o_prot.write_string(&self.locale)?;
     o_prot.write_field_end()?;
     o_prot.write_field_stop()?;
     o_prot.write_struct_end()

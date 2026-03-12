@@ -33,6 +33,8 @@ pub fn get_system_info() -> SystemInfo {
         hostname(),
         num_cpus(),
         total_memory(),
+        console_encoding(),
+        system_locale(),
     )
 }
 
@@ -149,5 +151,79 @@ fn total_memory() -> i64 {
     #[cfg(not(any(windows, target_os = "linux")))]
     {
         0
+    }
+}
+
+/// Detect console output encoding.
+/// Windows: reads OEM codepage via GetConsoleOutputCP().
+/// Unix: always UTF-8 (modern default).
+fn console_encoding() -> String {
+    #[cfg(windows)]
+    {
+        unsafe extern "system" {
+            fn GetConsoleOutputCP() -> u32;
+        }
+        let cp = unsafe { GetConsoleOutputCP() };
+        codepage_to_charset(cp).to_string()
+    }
+    #[cfg(not(windows))]
+    {
+        "UTF-8".to_string()
+    }
+}
+
+#[cfg(windows)]
+fn codepage_to_charset(cp: u32) -> &'static str {
+    match cp {
+        437 => "CP437",
+        850 => "CP850",
+        866 => "CP866",
+        874 => "x-windows-874",
+        932 => "Shift_JIS",
+        936 => "GBK",
+        949 => "EUC-KR",
+        950 => "Big5",
+        1250 => "windows-1250",
+        1251 => "windows-1251",
+        1252 => "windows-1252",
+        1253 => "windows-1253",
+        1254 => "windows-1254",
+        1255 => "windows-1255",
+        1256 => "windows-1256",
+        1257 => "windows-1257",
+        1258 => "windows-1258",
+        65001 => "UTF-8",
+        _ => "UTF-8",
+    }
+}
+
+/// Detect system locale.
+/// Unix: reads LC_ALL / LC_CTYPE / LANG environment variables.
+/// Windows: reads GetUserDefaultLocaleName().
+fn system_locale() -> String {
+    #[cfg(windows)]
+    {
+        use std::ffi::OsString;
+        use std::os::windows::ffi::OsStringExt;
+
+        unsafe extern "system" {
+            fn GetUserDefaultLocaleName(lp_locale_name: *mut u16, cch_locale_name: i32) -> i32;
+        }
+
+        let mut buf = [0u16; 85]; // LOCALE_NAME_MAX_LENGTH
+        let len = unsafe { GetUserDefaultLocaleName(buf.as_mut_ptr(), buf.len() as i32) };
+        if len > 0 {
+            let os = OsString::from_wide(&buf[..(len - 1) as usize]);
+            os.to_string_lossy().into_owned()
+        } else {
+            "unknown".to_string()
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        env::var("LC_ALL")
+            .or_else(|_| env::var("LC_CTYPE"))
+            .or_else(|_| env::var("LANG"))
+            .unwrap_or_else(|_| "en_US.UTF-8".to_string())
     }
 }

@@ -74,7 +74,11 @@ struct SystemInfo {
     3: required string arch,
     4: required string hostname,
     5: required i32 cpuCount,
-    6: required i64 totalMemory
+    6: required i64 totalMemory,
+    // Console encoding for decoding process output (e.g. "UTF-8", "CP866", "CP1251")
+    7: required string consoleEncoding,
+    // System locale (e.g. "en_US.UTF-8", "uk_UA.UTF-8")
+    8: required string locale
 }
 
 struct UserInfo {
