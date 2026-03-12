@@ -114,7 +114,7 @@ service RemoteAgentService {
 
     ProcessInfo startProcess(
         1: required string command,
-        2: required list<string> args,
+        2: required list<string> arguments,
         3: optional string workingDirectory,
         4: optional map<string, string> environment
     ) throws (1: AgentException error),

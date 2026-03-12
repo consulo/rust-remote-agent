@@ -789,7 +789,7 @@ impl TSerializable for AgentInfo {
 pub trait TRemoteAgentServiceSyncClient {
   fn get_agent_info(&mut self) -> thrift::Result<AgentInfo>;
   fn get_workspace_path(&mut self) -> thrift::Result<String>;
-  fn start_process(&mut self, command: String, args: Vec<String>, working_directory: String, environment: BTreeMap<String, String>) -> thrift::Result<ProcessInfo>;
+  fn start_process(&mut self, command: String, arguments: Vec<String>, working_directory: String, environment: BTreeMap<String, String>) -> thrift::Result<ProcessInfo>;
   fn kill_process(&mut self, pid: i64, force: bool) -> thrift::Result<bool>;
   fn is_process_alive(&mut self, pid: i64) -> thrift::Result<bool>;
   fn list_processes(&mut self) -> thrift::Result<Vec<ProcessInfo>>;
@@ -893,12 +893,12 @@ impl <C: TThriftClient + TRemoteAgentServiceSyncClientMarker> TRemoteAgentServic
       result.ok_or()
     }
   }
-  fn start_process(&mut self, command: String, args: Vec<String>, working_directory: String, environment: BTreeMap<String, String>) -> thrift::Result<ProcessInfo> {
+  fn start_process(&mut self, command: String, arguments: Vec<String>, working_directory: String, environment: BTreeMap<String, String>) -> thrift::Result<ProcessInfo> {
     (
       {
         self.increment_sequence_number();
         let message_ident = TMessageIdentifier::new("startProcess", TMessageType::Call, self.sequence_number());
-        let call_args = RemoteAgentServiceStartProcessArgs { command, args, working_directory, environment };
+        let call_args = RemoteAgentServiceStartProcessArgs { command, arguments, working_directory, environment };
         self.o_prot_mut().write_message_begin(&message_ident)?;
         call_args.write_to_out_protocol(self.o_prot_mut())?;
         self.o_prot_mut().write_message_end()?;
@@ -1550,7 +1550,7 @@ impl <C: TThriftClient + TRemoteAgentServiceSyncClientMarker> TRemoteAgentServic
 pub trait RemoteAgentServiceSyncHandler {
   fn handle_get_agent_info(&self) -> thrift::Result<AgentInfo>;
   fn handle_get_workspace_path(&self) -> thrift::Result<String>;
-  fn handle_start_process(&self, command: String, args: Vec<String>, working_directory: String, environment: BTreeMap<String, String>) -> thrift::Result<ProcessInfo>;
+  fn handle_start_process(&self, command: String, arguments: Vec<String>, working_directory: String, environment: BTreeMap<String, String>) -> thrift::Result<ProcessInfo>;
   fn handle_kill_process(&self, pid: i64, force: bool) -> thrift::Result<bool>;
   fn handle_is_process_alive(&self, pid: i64) -> thrift::Result<bool>;
   fn handle_list_processes(&self) -> thrift::Result<Vec<ProcessInfo>>;
@@ -1745,7 +1745,7 @@ impl TRemoteAgentServiceProcessFunctions {
   }
   pub fn process_start_process<H: RemoteAgentServiceSyncHandler>(handler: &H, incoming_sequence_number: i32, i_prot: &mut dyn TInputProtocol, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
     let args = RemoteAgentServiceStartProcessArgs::read_from_in_protocol(i_prot)?;
-    match handler.handle_start_process(args.command, args.args, args.working_directory, args.environment) {
+    match handler.handle_start_process(args.command, args.arguments, args.working_directory, args.environment) {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("startProcess", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
@@ -3293,7 +3293,7 @@ impl RemoteAgentServiceGetWorkspacePathResult {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct RemoteAgentServiceStartProcessArgs {
   command: String,
-  args: Vec<String>,
+  arguments: Vec<String>,
   working_directory: String,
   environment: BTreeMap<String, String>,
 }
@@ -3349,12 +3349,12 @@ impl RemoteAgentServiceStartProcessArgs {
     }
     i_prot.read_struct_end()?;
     verify_required_field_exists("RemoteAgentServiceStartProcessArgs.command", &f_1)?;
-    verify_required_field_exists("RemoteAgentServiceStartProcessArgs.args", &f_2)?;
+    verify_required_field_exists("RemoteAgentServiceStartProcessArgs.arguments", &f_2)?;
     verify_required_field_exists("RemoteAgentServiceStartProcessArgs.working_directory", &f_3)?;
     verify_required_field_exists("RemoteAgentServiceStartProcessArgs.environment", &f_4)?;
     let ret = RemoteAgentServiceStartProcessArgs {
       command: f_1.expect("auto-generated code should have checked for presence of required fields"),
-      args: f_2.expect("auto-generated code should have checked for presence of required fields"),
+      arguments: f_2.expect("auto-generated code should have checked for presence of required fields"),
       working_directory: f_3.expect("auto-generated code should have checked for presence of required fields"),
       environment: f_4.expect("auto-generated code should have checked for presence of required fields"),
     };
@@ -3366,9 +3366,9 @@ impl RemoteAgentServiceStartProcessArgs {
     o_prot.write_field_begin(&TFieldIdentifier::new("command", TType::String, 1))?;
     o_prot.write_string(&self.command)?;
     o_prot.write_field_end()?;
-    o_prot.write_field_begin(&TFieldIdentifier::new("args", TType::List, 2))?;
-    o_prot.write_list_begin(&TListIdentifier::new(TType::String, self.args.len() as i32))?;
-    for e in &self.args {
+    o_prot.write_field_begin(&TFieldIdentifier::new("arguments", TType::List, 2))?;
+    o_prot.write_list_begin(&TListIdentifier::new(TType::String, self.arguments.len() as i32))?;
+    for e in &self.arguments {
       o_prot.write_string(e)?;
     }
     o_prot.write_list_end()?;

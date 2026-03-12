@@ -54,12 +54,12 @@ impl RemoteAgentServiceSyncHandler for AgentServiceHandler {
     fn handle_start_process(
         &self,
         command: String,
-        args: Vec<String>,
+        arguments: Vec<String>,
         working_directory: String,
         environment: BTreeMap<String, String>,
     ) -> thrift::Result<ProcessInfo> {
         self.process_manager
-            .start_process(command, args, working_directory, environment)
+            .start_process(command, arguments, working_directory, environment)
     }
 
     fn handle_kill_process(&self, pid: i64, force: bool) -> thrift::Result<bool> {

@@ -27,7 +27,7 @@ pub fn get_env_variables() -> BTreeMap<String, String> {
 
 pub fn get_system_info() -> SystemInfo {
     SystemInfo::new(
-        env::consts::OS.to_string(),
+        os_name(),
         os_version(),
         env::consts::ARCH.to_string(),
         hostname(),
@@ -71,24 +71,106 @@ fn hostname() -> String {
     }
 }
 
-fn os_version() -> String {
-    #[cfg(windows)]
-    {
-        env::var("OS").unwrap_or_else(|_| "Windows".into())
-    }
+/// Returns a human-readable OS name.
+/// Linux: PRETTY_NAME from /etc/os-release (e.g. "Ubuntu 24.04.2 LTS")
+/// macOS: "macOS <ProductVersion>" via sw_vers (e.g. "macOS 15.3")
+/// Windows: "Windows" (version detail is in os_version())
+fn os_name() -> String {
     #[cfg(target_os = "linux")]
     {
-        std::fs::read_to_string("/proc/version")
-            .map(|s| s.trim().to_string())
-            .unwrap_or_else(|_| "Linux".into())
+        if let Ok(contents) = std::fs::read_to_string("/etc/os-release") {
+            for line in contents.lines() {
+                if let Some(value) = line.strip_prefix("PRETTY_NAME=") {
+                    return value.trim_matches('"').to_string();
+                }
+            }
+        }
+        "Linux".to_string()
     }
     #[cfg(target_os = "macos")]
     {
-        "macOS".into()
+        if let Ok(output) = std::process::Command::new("sw_vers")
+            .arg("-productVersion")
+            .output()
+        {
+            if output.status.success() {
+                let ver = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                return format!("macOS {}", ver);
+            }
+        }
+        "macOS".to_string()
+    }
+    #[cfg(target_os = "windows")]
+    {
+        "Windows".to_string()
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        env::consts::OS.to_string()
+    }
+}
+
+/// Returns the OS version / kernel version string.
+/// Windows: "10.0.26100" via RtlGetVersion (actual build, not compatibility-shimmed)
+/// Linux: kernel version from /proc/version (e.g. "6.8.0-51-generic")
+/// macOS: Darwin kernel version from uname (e.g. "24.3.0")
+fn os_version() -> String {
+    #[cfg(windows)]
+    {
+        #[repr(C)]
+        struct OsVersionInfoExW {
+            os_version_info_size: u32,
+            major_version: u32,
+            minor_version: u32,
+            build_number: u32,
+            platform_id: u32,
+            sz_csd_version: [u16; 128],
+            service_pack_major: u16,
+            service_pack_minor: u16,
+            suite_mask: u16,
+            product_type: u8,
+            reserved: u8,
+        }
+
+        unsafe extern "system" {
+            fn RtlGetVersion(lp_version_information: *mut OsVersionInfoExW) -> i32;
+        }
+
+        unsafe {
+            let mut info: OsVersionInfoExW = std::mem::zeroed();
+            info.os_version_info_size = std::mem::size_of::<OsVersionInfoExW>() as u32;
+            if RtlGetVersion(&mut info) == 0 {
+                format!("{}.{}.{}", info.major_version, info.minor_version, info.build_number)
+            } else {
+                "unknown".to_string()
+            }
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // Parse kernel version from /proc/version: "Linux version 6.8.0-51-generic ..."
+        std::fs::read_to_string("/proc/version")
+            .ok()
+            .and_then(|s| {
+                s.split_whitespace()
+                    .nth(2)
+                    .map(|v| v.to_string())
+            })
+            .unwrap_or_else(|| "unknown".to_string())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        // Darwin kernel version via uname -r
+        if let Ok(output) = std::process::Command::new("uname").arg("-r").output() {
+            if output.status.success() {
+                return String::from_utf8_lossy(&output.stdout).trim().to_string();
+            }
+        }
+        "unknown".to_string()
     }
     #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     {
-        "unknown".into()
+        "unknown".to_string()
     }
 }
 
