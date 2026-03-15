@@ -7,19 +7,22 @@
 package consulo.platform.remote.agent.protocol;
 
 @SuppressWarnings({"cast", "rawtypes", "serial", "unchecked", "unused"})
-public class AgentException extends org.apache.thrift.TException implements org.apache.thrift.TBase<AgentException, AgentException._Fields>, java.io.Serializable, Cloneable, Comparable<AgentException> {
-  private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("AgentException");
+public class PermissionException extends org.apache.thrift.TException implements org.apache.thrift.TBase<PermissionException, PermissionException._Fields>, java.io.Serializable, Cloneable, Comparable<PermissionException> {
+  private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("PermissionException");
 
   private static final org.apache.thrift.protocol.TField MESSAGE_FIELD_DESC = new org.apache.thrift.protocol.TField("message", org.apache.thrift.protocol.TType.STRING, (short)1);
+  private static final org.apache.thrift.protocol.TField PERMISSION_FIELD_DESC = new org.apache.thrift.protocol.TField("permission", org.apache.thrift.protocol.TType.STRING, (short)2);
 
-  private static final org.apache.thrift.scheme.SchemeFactory STANDARD_SCHEME_FACTORY = new AgentExceptionStandardSchemeFactory();
-  private static final org.apache.thrift.scheme.SchemeFactory TUPLE_SCHEME_FACTORY = new AgentExceptionTupleSchemeFactory();
+  private static final org.apache.thrift.scheme.SchemeFactory STANDARD_SCHEME_FACTORY = new PermissionExceptionStandardSchemeFactory();
+  private static final org.apache.thrift.scheme.SchemeFactory TUPLE_SCHEME_FACTORY = new PermissionExceptionTupleSchemeFactory();
 
   public @org.apache.thrift.annotation.Nullable java.lang.String message; // required
+  public @org.apache.thrift.annotation.Nullable java.lang.String permission; // required
 
   /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
   public enum _Fields implements org.apache.thrift.TFieldIdEnum {
-    MESSAGE((short)1, "message");
+    MESSAGE((short)1, "message"),
+    PERMISSION((short)2, "permission");
 
     private static final java.util.Map<java.lang.String, _Fields> byName = new java.util.HashMap<java.lang.String, _Fields>();
 
@@ -37,6 +40,8 @@ public class AgentException extends org.apache.thrift.TException implements org.
       switch(fieldId) {
         case 1: // MESSAGE
           return MESSAGE;
+        case 2: // PERMISSION
+          return PERMISSION;
         default:
           return null;
       }
@@ -85,37 +90,45 @@ public class AgentException extends org.apache.thrift.TException implements org.
     java.util.Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new java.util.EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
     tmpMap.put(_Fields.MESSAGE, new org.apache.thrift.meta_data.FieldMetaData("message", org.apache.thrift.TFieldRequirementType.REQUIRED, 
         new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
+    tmpMap.put(_Fields.PERMISSION, new org.apache.thrift.meta_data.FieldMetaData("permission", org.apache.thrift.TFieldRequirementType.REQUIRED, 
+        new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
     metaDataMap = java.util.Collections.unmodifiableMap(tmpMap);
-    org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(AgentException.class, metaDataMap);
+    org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(PermissionException.class, metaDataMap);
   }
 
-  public AgentException() {
+  public PermissionException() {
   }
 
-  public AgentException(
-    java.lang.String message)
+  public PermissionException(
+    java.lang.String message,
+    java.lang.String permission)
   {
     this();
     this.message = message;
+    this.permission = permission;
   }
 
   /**
    * Performs a deep copy on <i>other</i>.
    */
-  public AgentException(AgentException other) {
+  public PermissionException(PermissionException other) {
     if (other.isSetMessage()) {
       this.message = other.message;
+    }
+    if (other.isSetPermission()) {
+      this.permission = other.permission;
     }
   }
 
   @Override
-  public AgentException deepCopy() {
-    return new AgentException(this);
+  public PermissionException deepCopy() {
+    return new PermissionException(this);
   }
 
   @Override
   public void clear() {
     this.message = null;
+    this.permission = null;
   }
 
   @org.apache.thrift.annotation.Nullable
@@ -123,7 +136,7 @@ public class AgentException extends org.apache.thrift.TException implements org.
     return this.message;
   }
 
-  public AgentException setMessage(@org.apache.thrift.annotation.Nullable java.lang.String message) {
+  public PermissionException setMessage(@org.apache.thrift.annotation.Nullable java.lang.String message) {
     this.message = message;
     return this;
   }
@@ -143,6 +156,31 @@ public class AgentException extends org.apache.thrift.TException implements org.
     }
   }
 
+  @org.apache.thrift.annotation.Nullable
+  public java.lang.String getPermission() {
+    return this.permission;
+  }
+
+  public PermissionException setPermission(@org.apache.thrift.annotation.Nullable java.lang.String permission) {
+    this.permission = permission;
+    return this;
+  }
+
+  public void unsetPermission() {
+    this.permission = null;
+  }
+
+  /** Returns true if field permission is set (has been assigned a value) and false otherwise */
+  public boolean isSetPermission() {
+    return this.permission != null;
+  }
+
+  public void setPermissionIsSet(boolean value) {
+    if (!value) {
+      this.permission = null;
+    }
+  }
+
   @Override
   public void setFieldValue(_Fields field, @org.apache.thrift.annotation.Nullable java.lang.Object value) {
     switch (field) {
@@ -151,6 +189,14 @@ public class AgentException extends org.apache.thrift.TException implements org.
         unsetMessage();
       } else {
         setMessage((java.lang.String)value);
+      }
+      break;
+
+    case PERMISSION:
+      if (value == null) {
+        unsetPermission();
+      } else {
+        setPermission((java.lang.String)value);
       }
       break;
 
@@ -163,6 +209,9 @@ public class AgentException extends org.apache.thrift.TException implements org.
     switch (field) {
     case MESSAGE:
       return getMessage();
+
+    case PERMISSION:
+      return getPermission();
 
     }
     throw new java.lang.IllegalStateException();
@@ -178,18 +227,20 @@ public class AgentException extends org.apache.thrift.TException implements org.
     switch (field) {
     case MESSAGE:
       return isSetMessage();
+    case PERMISSION:
+      return isSetPermission();
     }
     throw new java.lang.IllegalStateException();
   }
 
   @Override
   public boolean equals(java.lang.Object that) {
-    if (that instanceof AgentException)
-      return this.equals((AgentException)that);
+    if (that instanceof PermissionException)
+      return this.equals((PermissionException)that);
     return false;
   }
 
-  public boolean equals(AgentException that) {
+  public boolean equals(PermissionException that) {
     if (that == null)
       return false;
     if (this == that)
@@ -204,6 +255,15 @@ public class AgentException extends org.apache.thrift.TException implements org.
         return false;
     }
 
+    boolean this_present_permission = true && this.isSetPermission();
+    boolean that_present_permission = true && that.isSetPermission();
+    if (this_present_permission || that_present_permission) {
+      if (!(this_present_permission && that_present_permission))
+        return false;
+      if (!this.permission.equals(that.permission))
+        return false;
+    }
+
     return true;
   }
 
@@ -215,11 +275,15 @@ public class AgentException extends org.apache.thrift.TException implements org.
     if (isSetMessage())
       hashCode = hashCode * 8191 + message.hashCode();
 
+    hashCode = hashCode * 8191 + ((isSetPermission()) ? 131071 : 524287);
+    if (isSetPermission())
+      hashCode = hashCode * 8191 + permission.hashCode();
+
     return hashCode;
   }
 
   @Override
-  public int compareTo(AgentException other) {
+  public int compareTo(PermissionException other) {
     if (!getClass().equals(other.getClass())) {
       return getClass().getName().compareTo(other.getClass().getName());
     }
@@ -232,6 +296,16 @@ public class AgentException extends org.apache.thrift.TException implements org.
     }
     if (isSetMessage()) {
       lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.message, other.message);
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+    }
+    lastComparison = java.lang.Boolean.compare(isSetPermission(), other.isSetPermission());
+    if (lastComparison != 0) {
+      return lastComparison;
+    }
+    if (isSetPermission()) {
+      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.permission, other.permission);
       if (lastComparison != 0) {
         return lastComparison;
       }
@@ -257,7 +331,7 @@ public class AgentException extends org.apache.thrift.TException implements org.
 
   @Override
   public java.lang.String toString() {
-    java.lang.StringBuilder sb = new java.lang.StringBuilder("AgentException(");
+    java.lang.StringBuilder sb = new java.lang.StringBuilder("PermissionException(");
     boolean first = true;
 
     sb.append("message:");
@@ -265,6 +339,14 @@ public class AgentException extends org.apache.thrift.TException implements org.
       sb.append("null");
     } else {
       sb.append(this.message);
+    }
+    first = false;
+    if (!first) sb.append(", ");
+    sb.append("permission:");
+    if (this.permission == null) {
+      sb.append("null");
+    } else {
+      sb.append(this.permission);
     }
     first = false;
     sb.append(")");
@@ -275,6 +357,9 @@ public class AgentException extends org.apache.thrift.TException implements org.
     // check for required fields
     if (message == null) {
       throw new org.apache.thrift.protocol.TProtocolException("Required field 'message' was not present! Struct: " + toString());
+    }
+    if (permission == null) {
+      throw new org.apache.thrift.protocol.TProtocolException("Required field 'permission' was not present! Struct: " + toString());
     }
     // check for sub-struct validity
   }
@@ -295,17 +380,17 @@ public class AgentException extends org.apache.thrift.TException implements org.
     }
   }
 
-  private static class AgentExceptionStandardSchemeFactory implements org.apache.thrift.scheme.SchemeFactory {
+  private static class PermissionExceptionStandardSchemeFactory implements org.apache.thrift.scheme.SchemeFactory {
     @Override
-    public AgentExceptionStandardScheme getScheme() {
-      return new AgentExceptionStandardScheme();
+    public PermissionExceptionStandardScheme getScheme() {
+      return new PermissionExceptionStandardScheme();
     }
   }
 
-  private static class AgentExceptionStandardScheme extends org.apache.thrift.scheme.StandardScheme<AgentException> {
+  private static class PermissionExceptionStandardScheme extends org.apache.thrift.scheme.StandardScheme<PermissionException> {
 
     @Override
-    public void read(org.apache.thrift.protocol.TProtocol iprot, AgentException struct) throws org.apache.thrift.TException {
+    public void read(org.apache.thrift.protocol.TProtocol iprot, PermissionException struct) throws org.apache.thrift.TException {
       org.apache.thrift.protocol.TField schemeField;
       iprot.readStructBegin();
       while (true)
@@ -323,6 +408,14 @@ public class AgentException extends org.apache.thrift.TException implements org.
               org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
             }
             break;
+          case 2: // PERMISSION
+            if (schemeField.type == org.apache.thrift.protocol.TType.STRING) {
+              struct.permission = iprot.readString();
+              struct.setPermissionIsSet(true);
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
+            }
+            break;
           default:
             org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
         }
@@ -335,7 +428,7 @@ public class AgentException extends org.apache.thrift.TException implements org.
     }
 
     @Override
-    public void write(org.apache.thrift.protocol.TProtocol oprot, AgentException struct) throws org.apache.thrift.TException {
+    public void write(org.apache.thrift.protocol.TProtocol oprot, PermissionException struct) throws org.apache.thrift.TException {
       struct.validate();
 
       oprot.writeStructBegin(STRUCT_DESC);
@@ -344,32 +437,40 @@ public class AgentException extends org.apache.thrift.TException implements org.
         oprot.writeString(struct.message);
         oprot.writeFieldEnd();
       }
+      if (struct.permission != null) {
+        oprot.writeFieldBegin(PERMISSION_FIELD_DESC);
+        oprot.writeString(struct.permission);
+        oprot.writeFieldEnd();
+      }
       oprot.writeFieldStop();
       oprot.writeStructEnd();
     }
 
   }
 
-  private static class AgentExceptionTupleSchemeFactory implements org.apache.thrift.scheme.SchemeFactory {
+  private static class PermissionExceptionTupleSchemeFactory implements org.apache.thrift.scheme.SchemeFactory {
     @Override
-    public AgentExceptionTupleScheme getScheme() {
-      return new AgentExceptionTupleScheme();
+    public PermissionExceptionTupleScheme getScheme() {
+      return new PermissionExceptionTupleScheme();
     }
   }
 
-  private static class AgentExceptionTupleScheme extends org.apache.thrift.scheme.TupleScheme<AgentException> {
+  private static class PermissionExceptionTupleScheme extends org.apache.thrift.scheme.TupleScheme<PermissionException> {
 
     @Override
-    public void write(org.apache.thrift.protocol.TProtocol prot, AgentException struct) throws org.apache.thrift.TException {
+    public void write(org.apache.thrift.protocol.TProtocol prot, PermissionException struct) throws org.apache.thrift.TException {
       org.apache.thrift.protocol.TTupleProtocol oprot = (org.apache.thrift.protocol.TTupleProtocol) prot;
       oprot.writeString(struct.message);
+      oprot.writeString(struct.permission);
     }
 
     @Override
-    public void read(org.apache.thrift.protocol.TProtocol prot, AgentException struct) throws org.apache.thrift.TException {
+    public void read(org.apache.thrift.protocol.TProtocol prot, PermissionException struct) throws org.apache.thrift.TException {
       org.apache.thrift.protocol.TTupleProtocol iprot = (org.apache.thrift.protocol.TTupleProtocol) prot;
       struct.message = iprot.readString();
       struct.setMessageIsSet(true);
+      struct.permission = iprot.readString();
+      struct.setPermissionIsSet(true);
     }
   }
 
