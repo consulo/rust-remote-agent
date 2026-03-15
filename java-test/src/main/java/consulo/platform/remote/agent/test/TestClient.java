@@ -50,6 +50,9 @@ public class TestClient {
             // --- System Info ---
             testSystemInfo(client);
 
+            // --- Stat ---
+            testStat(client);
+
             // --- User Info ---
             testUserInfo(client);
 
@@ -97,8 +100,6 @@ public class TestClient {
         System.out.println("  os:       " + info.getOsName() + " " + info.getOsVersion());
         System.out.println("  arch:     " + info.getArch());
         System.out.println("  hostname: " + info.getHostname());
-        System.out.println("  cpus:     " + info.getCpuCount());
-        System.out.println("  memory:   " + (info.getTotalMemory() / 1024 / 1024) + " MB");
         System.out.println("  encoding: " + info.getConsoleEncoding());
         System.out.println("  locale:   " + info.getLocale());
     }
@@ -223,6 +224,15 @@ public class TestClient {
 
         HttpResponse deleteResp = client.executeHttpRequest(deleteReq);
         System.out.println("  DELETE status: " + deleteResp.getStatusCode());
+    }
+
+    private static void testStat(RemoteAgentService.Client client) throws TException {
+        System.out.println("\n--- Stat ---");
+        StatInfo stat = client.getStat();
+        System.out.println("  cpus:       " + stat.getCpuCount());
+        System.out.println("  cpu load:   " + String.format("%.1f%%", stat.getCpuLoad() * 100));
+        System.out.println("  total mem:  " + (stat.getTotalMemory() / 1024 / 1024) + " MB");
+        System.out.println("  used mem:   " + (stat.getUsedMemory() / 1024 / 1024) + " MB");
     }
 
     private static void testFindFreePort(RemoteAgentService.Client client) throws TException {

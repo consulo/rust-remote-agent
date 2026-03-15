@@ -516,21 +516,17 @@ pub struct SystemInfo {
   pub os_version: String,
   pub arch: String,
   pub hostname: String,
-  pub cpu_count: i32,
-  pub total_memory: i64,
   pub console_encoding: String,
   pub locale: String,
 }
 
 impl SystemInfo {
-  pub fn new(os_name: String, os_version: String, arch: String, hostname: String, cpu_count: i32, total_memory: i64, console_encoding: String, locale: String) -> SystemInfo {
+  pub fn new(os_name: String, os_version: String, arch: String, hostname: String, console_encoding: String, locale: String) -> SystemInfo {
     SystemInfo {
       os_name,
       os_version,
       arch,
       hostname,
-      cpu_count,
-      total_memory,
       console_encoding,
       locale,
     }
@@ -544,8 +540,6 @@ impl TSerializable for SystemInfo {
     let mut f_2: Option<String> = None;
     let mut f_3: Option<String> = None;
     let mut f_4: Option<String> = None;
-    let mut f_5: Option<i32> = None;
-    let mut f_6: Option<i64> = None;
     let mut f_7: Option<String> = None;
     let mut f_8: Option<String> = None;
     loop {
@@ -571,14 +565,6 @@ impl TSerializable for SystemInfo {
           let val = i_prot.read_string()?;
           f_4 = Some(val);
         },
-        5 => {
-          let val = i_prot.read_i32()?;
-          f_5 = Some(val);
-        },
-        6 => {
-          let val = i_prot.read_i64()?;
-          f_6 = Some(val);
-        },
         7 => {
           let val = i_prot.read_string()?;
           f_7 = Some(val);
@@ -598,8 +584,6 @@ impl TSerializable for SystemInfo {
     verify_required_field_exists("SystemInfo.os_version", &f_2)?;
     verify_required_field_exists("SystemInfo.arch", &f_3)?;
     verify_required_field_exists("SystemInfo.hostname", &f_4)?;
-    verify_required_field_exists("SystemInfo.cpu_count", &f_5)?;
-    verify_required_field_exists("SystemInfo.total_memory", &f_6)?;
     verify_required_field_exists("SystemInfo.console_encoding", &f_7)?;
     verify_required_field_exists("SystemInfo.locale", &f_8)?;
     let ret = SystemInfo {
@@ -607,8 +591,6 @@ impl TSerializable for SystemInfo {
       os_version: f_2.expect("auto-generated code should have checked for presence of required fields"),
       arch: f_3.expect("auto-generated code should have checked for presence of required fields"),
       hostname: f_4.expect("auto-generated code should have checked for presence of required fields"),
-      cpu_count: f_5.expect("auto-generated code should have checked for presence of required fields"),
-      total_memory: f_6.expect("auto-generated code should have checked for presence of required fields"),
       console_encoding: f_7.expect("auto-generated code should have checked for presence of required fields"),
       locale: f_8.expect("auto-generated code should have checked for presence of required fields"),
     };
@@ -629,17 +611,103 @@ impl TSerializable for SystemInfo {
     o_prot.write_field_begin(&TFieldIdentifier::new("hostname", TType::String, 4))?;
     o_prot.write_string(&self.hostname)?;
     o_prot.write_field_end()?;
-    o_prot.write_field_begin(&TFieldIdentifier::new("cpuCount", TType::I32, 5))?;
-    o_prot.write_i32(self.cpu_count)?;
-    o_prot.write_field_end()?;
-    o_prot.write_field_begin(&TFieldIdentifier::new("totalMemory", TType::I64, 6))?;
-    o_prot.write_i64(self.total_memory)?;
-    o_prot.write_field_end()?;
     o_prot.write_field_begin(&TFieldIdentifier::new("consoleEncoding", TType::String, 7))?;
     o_prot.write_string(&self.console_encoding)?;
     o_prot.write_field_end()?;
     o_prot.write_field_begin(&TFieldIdentifier::new("locale", TType::String, 8))?;
     o_prot.write_string(&self.locale)?;
+    o_prot.write_field_end()?;
+    o_prot.write_field_stop()?;
+    o_prot.write_struct_end()
+  }
+}
+
+//
+// StatInfo
+//
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct StatInfo {
+  pub cpu_count: i32,
+  pub cpu_load: OrderedFloat<f64>,
+  pub total_memory: i64,
+  pub used_memory: i64,
+}
+
+impl StatInfo {
+  pub fn new(cpu_count: i32, cpu_load: OrderedFloat<f64>, total_memory: i64, used_memory: i64) -> StatInfo {
+    StatInfo {
+      cpu_count,
+      cpu_load,
+      total_memory,
+      used_memory,
+    }
+  }
+}
+
+impl TSerializable for StatInfo {
+  fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<StatInfo> {
+    i_prot.read_struct_begin()?;
+    let mut f_1: Option<i32> = None;
+    let mut f_2: Option<OrderedFloat<f64>> = None;
+    let mut f_3: Option<i64> = None;
+    let mut f_4: Option<i64> = None;
+    loop {
+      let field_ident = i_prot.read_field_begin()?;
+      if field_ident.field_type == TType::Stop {
+        break;
+      }
+      let field_id = field_id(&field_ident)?;
+      match field_id {
+        1 => {
+          let val = i_prot.read_i32()?;
+          f_1 = Some(val);
+        },
+        2 => {
+          let val = OrderedFloat::from(i_prot.read_double()?);
+          f_2 = Some(val);
+        },
+        3 => {
+          let val = i_prot.read_i64()?;
+          f_3 = Some(val);
+        },
+        4 => {
+          let val = i_prot.read_i64()?;
+          f_4 = Some(val);
+        },
+        _ => {
+          i_prot.skip(field_ident.field_type)?;
+        },
+      };
+      i_prot.read_field_end()?;
+    }
+    i_prot.read_struct_end()?;
+    verify_required_field_exists("StatInfo.cpu_count", &f_1)?;
+    verify_required_field_exists("StatInfo.cpu_load", &f_2)?;
+    verify_required_field_exists("StatInfo.total_memory", &f_3)?;
+    verify_required_field_exists("StatInfo.used_memory", &f_4)?;
+    let ret = StatInfo {
+      cpu_count: f_1.expect("auto-generated code should have checked for presence of required fields"),
+      cpu_load: f_2.expect("auto-generated code should have checked for presence of required fields"),
+      total_memory: f_3.expect("auto-generated code should have checked for presence of required fields"),
+      used_memory: f_4.expect("auto-generated code should have checked for presence of required fields"),
+    };
+    Ok(ret)
+  }
+  fn write_to_out_protocol(&self, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
+    let struct_ident = TStructIdentifier::new("StatInfo");
+    o_prot.write_struct_begin(&struct_ident)?;
+    o_prot.write_field_begin(&TFieldIdentifier::new("cpuCount", TType::I32, 1))?;
+    o_prot.write_i32(self.cpu_count)?;
+    o_prot.write_field_end()?;
+    o_prot.write_field_begin(&TFieldIdentifier::new("cpuLoad", TType::Double, 2))?;
+    o_prot.write_double(self.cpu_load.into())?;
+    o_prot.write_field_end()?;
+    o_prot.write_field_begin(&TFieldIdentifier::new("totalMemory", TType::I64, 3))?;
+    o_prot.write_i64(self.total_memory)?;
+    o_prot.write_field_end()?;
+    o_prot.write_field_begin(&TFieldIdentifier::new("usedMemory", TType::I64, 4))?;
+    o_prot.write_i64(self.used_memory)?;
     o_prot.write_field_end()?;
     o_prot.write_field_stop()?;
     o_prot.write_struct_end()
@@ -1181,6 +1249,7 @@ pub trait TRemoteAgentServiceSyncClient {
   fn get_env_variable(&mut self, name: String) -> thrift::Result<String>;
   fn get_env_variables(&mut self) -> thrift::Result<BTreeMap<String, String>>;
   fn get_system_info(&mut self) -> thrift::Result<SystemInfo>;
+  fn get_stat(&mut self) -> thrift::Result<StatInfo>;
   fn get_user_info(&mut self) -> thrift::Result<UserInfo>;
   fn execute_http_request(&mut self, request: HttpRequest) -> thrift::Result<HttpResponse>;
   fn connect_web_socket(&mut self, url: String, headers: BTreeMap<String, String>) -> thrift::Result<String>;
@@ -1889,6 +1958,33 @@ impl <C: TThriftClient + TRemoteAgentServiceSyncClientMarker> TRemoteAgentServic
       result.ok_or()
     }
   }
+  fn get_stat(&mut self) -> thrift::Result<StatInfo> {
+    (
+      {
+        self.increment_sequence_number();
+        let message_ident = TMessageIdentifier::new("getStat", TMessageType::Call, self.sequence_number());
+        let call_args = RemoteAgentServiceGetStatArgs {  };
+        self.o_prot_mut().write_message_begin(&message_ident)?;
+        call_args.write_to_out_protocol(self.o_prot_mut())?;
+        self.o_prot_mut().write_message_end()?;
+        self.o_prot_mut().flush()
+      }
+    )?;
+    {
+      let message_ident = self.i_prot_mut().read_message_begin()?;
+      verify_expected_sequence_number(self.sequence_number(), message_ident.sequence_number)?;
+      verify_expected_service_call("getStat", &message_ident.name)?;
+      if message_ident.message_type == TMessageType::Exception {
+        let remote_error = thrift::Error::read_application_error_from_in_protocol(self.i_prot_mut())?;
+        self.i_prot_mut().read_message_end()?;
+        return Err(thrift::Error::Application(remote_error))
+      }
+      verify_expected_message_type(TMessageType::Reply, message_ident.message_type)?;
+      let result = RemoteAgentServiceGetStatResult::read_from_in_protocol(self.i_prot_mut())?;
+      self.i_prot_mut().read_message_end()?;
+      result.ok_or()
+    }
+  }
   fn get_user_info(&mut self) -> thrift::Result<UserInfo> {
     (
       {
@@ -2110,6 +2206,7 @@ pub trait RemoteAgentServiceSyncHandler {
   fn handle_get_env_variable(&self, name: String) -> thrift::Result<String>;
   fn handle_get_env_variables(&self) -> thrift::Result<BTreeMap<String, String>>;
   fn handle_get_system_info(&self) -> thrift::Result<SystemInfo>;
+  fn handle_get_stat(&self) -> thrift::Result<StatInfo>;
   fn handle_get_user_info(&self) -> thrift::Result<UserInfo>;
   fn handle_execute_http_request(&self, request: HttpRequest) -> thrift::Result<HttpResponse>;
   fn handle_connect_web_socket(&self, url: String, headers: BTreeMap<String, String>) -> thrift::Result<String>;
@@ -2203,6 +2300,9 @@ impl <H: RemoteAgentServiceSyncHandler> RemoteAgentServiceSyncProcessor<H> {
   }
   fn process_get_system_info(&self, incoming_sequence_number: i32, i_prot: &mut dyn TInputProtocol, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
     TRemoteAgentServiceProcessFunctions::process_get_system_info(&self.handler, incoming_sequence_number, i_prot, o_prot)
+  }
+  fn process_get_stat(&self, incoming_sequence_number: i32, i_prot: &mut dyn TInputProtocol, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
+    TRemoteAgentServiceProcessFunctions::process_get_stat(&self.handler, incoming_sequence_number, i_prot, o_prot)
   }
   fn process_get_user_info(&self, incoming_sequence_number: i32, i_prot: &mut dyn TInputProtocol, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
     TRemoteAgentServiceProcessFunctions::process_get_user_info(&self.handler, incoming_sequence_number, i_prot, o_prot)
@@ -3523,6 +3623,66 @@ impl TRemoteAgentServiceProcessFunctions {
       },
     }
   }
+  pub fn process_get_stat<H: RemoteAgentServiceSyncHandler>(handler: &H, incoming_sequence_number: i32, i_prot: &mut dyn TInputProtocol, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
+    let _ = RemoteAgentServiceGetStatArgs::read_from_in_protocol(i_prot)?;
+    match handler.handle_get_stat() {
+      Ok(handler_return) => {
+        let message_ident = TMessageIdentifier::new("getStat", TMessageType::Reply, incoming_sequence_number);
+        o_prot.write_message_begin(&message_ident)?;
+        let ret = RemoteAgentServiceGetStatResult { result_value: Some(handler_return), error: None };
+        ret.write_to_out_protocol(o_prot)?;
+        o_prot.write_message_end()?;
+        o_prot.flush()
+      },
+      Err(e) => {
+        match e {
+          thrift::Error::User(usr_err) => {
+            if usr_err.downcast_ref::<AgentException>().is_some() {
+              let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceGetStatResult{ result_value: None, error: Some(*err) };
+              let message_ident = TMessageIdentifier::new("getStat", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else {
+              let ret_err = {
+                ApplicationError::new(
+                  ApplicationErrorKind::Unknown,
+                  usr_err.to_string()
+                )
+              };
+              let message_ident = TMessageIdentifier::new("getStat", TMessageType::Exception, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              thrift::Error::write_application_error_to_out_protocol(&ret_err, o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            }
+          },
+          thrift::Error::Application(app_err) => {
+            let message_ident = TMessageIdentifier::new("getStat", TMessageType::Exception, incoming_sequence_number);
+            o_prot.write_message_begin(&message_ident)?;
+            thrift::Error::write_application_error_to_out_protocol(&app_err, o_prot)?;
+            o_prot.write_message_end()?;
+            o_prot.flush()
+          },
+          _ => {
+            let ret_err = {
+              ApplicationError::new(
+                ApplicationErrorKind::Unknown,
+                e.to_string()
+              )
+            };
+            let message_ident = TMessageIdentifier::new("getStat", TMessageType::Exception, incoming_sequence_number);
+            o_prot.write_message_begin(&message_ident)?;
+            thrift::Error::write_application_error_to_out_protocol(&ret_err, o_prot)?;
+            o_prot.write_message_end()?;
+            o_prot.flush()
+          },
+        }
+      },
+    }
+  }
   pub fn process_get_user_info<H: RemoteAgentServiceSyncHandler>(handler: &H, incoming_sequence_number: i32, i_prot: &mut dyn TInputProtocol, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
     let _ = RemoteAgentServiceGetUserInfoArgs::read_from_in_protocol(i_prot)?;
     match handler.handle_get_user_info() {
@@ -4000,6 +4160,9 @@ impl <H: RemoteAgentServiceSyncHandler> TProcessor for RemoteAgentServiceSyncPro
       },
       "getSystemInfo" => {
         self.process_get_system_info(message_ident.sequence_number, i_prot, o_prot)
+      },
+      "getStat" => {
+        self.process_get_stat(message_ident.sequence_number, i_prot, o_prot)
       },
       "getUserInfo" => {
         self.process_get_user_info(message_ident.sequence_number, i_prot, o_prot)
@@ -6974,6 +7137,114 @@ impl RemoteAgentServiceGetSystemInfoResult {
     o_prot.write_struct_begin(&struct_ident)?;
     if let Some(ref fld_var) = self.result_value {
       o_prot.write_field_begin(&TFieldIdentifier::new("result_value", TType::Struct, 0))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    o_prot.write_field_stop()?;
+    o_prot.write_struct_end()
+  }
+}
+
+//
+// RemoteAgentServiceGetStatArgs
+//
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+struct RemoteAgentServiceGetStatArgs {
+}
+
+impl RemoteAgentServiceGetStatArgs {
+  fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<RemoteAgentServiceGetStatArgs> {
+    i_prot.read_struct_begin()?;
+    loop {
+      let field_ident = i_prot.read_field_begin()?;
+      if field_ident.field_type == TType::Stop {
+        break;
+      }
+      i_prot.skip(field_ident.field_type)?;
+      i_prot.read_field_end()?;
+    }
+    i_prot.read_struct_end()?;
+    let ret = RemoteAgentServiceGetStatArgs {};
+    Ok(ret)
+  }
+  fn write_to_out_protocol(&self, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
+    let struct_ident = TStructIdentifier::new("getStat_args");
+    o_prot.write_struct_begin(&struct_ident)?;
+    o_prot.write_field_stop()?;
+    o_prot.write_struct_end()
+  }
+}
+
+//
+// RemoteAgentServiceGetStatResult
+//
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+struct RemoteAgentServiceGetStatResult {
+  result_value: Option<StatInfo>,
+  error: Option<AgentException>,
+}
+
+impl RemoteAgentServiceGetStatResult {
+  fn ok_or(self) -> thrift::Result<StatInfo> {
+    if self.error.is_some() {
+      Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.result_value.is_some() {
+      Ok(self.result_value.unwrap())
+    } else {
+      Err(
+        thrift::Error::Application(
+          ApplicationError::new(
+            ApplicationErrorKind::MissingResult,
+            "no result received for RemoteAgentServiceGetStat"
+          )
+        )
+      )
+    }
+  }
+  fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<RemoteAgentServiceGetStatResult> {
+    i_prot.read_struct_begin()?;
+    let mut f_0: Option<StatInfo> = None;
+    let mut f_1: Option<AgentException> = None;
+    loop {
+      let field_ident = i_prot.read_field_begin()?;
+      if field_ident.field_type == TType::Stop {
+        break;
+      }
+      let field_id = field_id(&field_ident)?;
+      match field_id {
+        0 => {
+          let val = StatInfo::read_from_in_protocol(i_prot)?;
+          f_0 = Some(val);
+        },
+        1 => {
+          let val = AgentException::read_from_in_protocol(i_prot)?;
+          f_1 = Some(val);
+        },
+        _ => {
+          i_prot.skip(field_ident.field_type)?;
+        },
+      };
+      i_prot.read_field_end()?;
+    }
+    i_prot.read_struct_end()?;
+    let ret = RemoteAgentServiceGetStatResult {
+      result_value: f_0,
+      error: f_1,
+    };
+    Ok(ret)
+  }
+  fn write_to_out_protocol(&self, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
+    let struct_ident = TStructIdentifier::new("RemoteAgentServiceGetStatResult");
+    o_prot.write_struct_begin(&struct_ident)?;
+    if let Some(ref fld_var) = self.result_value {
+      o_prot.write_field_begin(&TFieldIdentifier::new("result_value", TType::Struct, 0))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }

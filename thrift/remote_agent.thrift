@@ -73,12 +73,17 @@ struct SystemInfo {
     2: required string osVersion,
     3: required string arch,
     4: required string hostname,
-    5: required i32 cpuCount,
-    6: required i64 totalMemory,
     // Console encoding for decoding process output (e.g. "UTF-8", "CP866", "CP1251")
     7: required string consoleEncoding,
     // System locale (e.g. "en_US.UTF-8", "uk_UA.UTF-8")
     8: required string locale
+}
+
+struct StatInfo {
+    1: required i32 cpuCount,
+    2: required double cpuLoad,       // CPU usage 0.0–1.0
+    3: required i64 totalMemory,      // total RAM in bytes
+    4: required i64 usedMemory        // used RAM in bytes
 }
 
 struct UserInfo {
@@ -251,6 +256,8 @@ service RemoteAgentService {
     map<string, string> getEnvVariables(),
 
     SystemInfo getSystemInfo(),
+
+    StatInfo getStat() throws (1: AgentException error),
 
     UserInfo getUserInfo(),
 

@@ -47,6 +47,7 @@ remote-agent [OPTIONS]
 | `http` | executeHttpRequest |
 | `websocket` | connectWebSocket, readWebSocketData, sendWebSocketData, closeWebSocket |
 | `userinfo` | getUserInfo |
+| `stat` | getStat |
 
 Methods that are always accessible (no permission needed): `getAgentInfo`, `getWorkspacePath`, `getSystemInfo`, `getEnvVariable`, `getEnvVariables`, `findFreePort`.
 

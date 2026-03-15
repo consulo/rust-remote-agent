@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, HashSet};
 use crate::generated::remote_agent::*;
 use crate::handler;
 
-const ALL_GROUPS: &[&str] = &["fs", "process", "http", "websocket", "userinfo"];
+const ALL_GROUPS: &[&str] = &["fs", "process", "http", "websocket", "userinfo", "stat"];
 
 fn agent_err(msg: String) -> thrift::Error {
     thrift::Error::User(Box::new(AgentException::new(msg)))
@@ -247,6 +247,13 @@ impl RemoteAgentServiceSyncHandler for AgentServiceHandler {
 
     fn handle_get_system_info(&self) -> thrift::Result<SystemInfo> {
         Ok(handler::env::get_system_info())
+    }
+
+    // --- Stat (permission: stat) ---
+
+    fn handle_get_stat(&self) -> thrift::Result<StatInfo> {
+        self.permissions.check("stat")?;
+        Ok(handler::env::get_stat())
     }
 
     // --- User Info (permission: userinfo) ---

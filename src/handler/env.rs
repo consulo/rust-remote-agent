@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 use std::env;
 
-use crate::generated::remote_agent::{SystemInfo, UserInfo};
+use crate::generated::remote_agent::{StatInfo, SystemInfo, UserInfo};
 
 pub fn get_env_variable(name: &str) -> String {
     env::var(name).unwrap_or_default()
@@ -31,10 +31,18 @@ pub fn get_system_info() -> SystemInfo {
         os_version(),
         env::consts::ARCH.to_string(),
         hostname(),
-        num_cpus(),
-        total_memory(),
         console_encoding(),
         system_locale(),
+    )
+}
+
+pub fn get_stat() -> StatInfo {
+    let (total, used) = memory_stats();
+    StatInfo::new(
+        num_cpus(),
+        thrift::OrderedFloat(cpu_load()),
+        total,
+        used,
     )
 }
 
@@ -180,10 +188,10 @@ fn num_cpus() -> i32 {
         .unwrap_or(1)
 }
 
-fn total_memory() -> i64 {
+/// Returns (total_memory, used_memory) in bytes.
+fn memory_stats() -> (i64, i64) {
     #[cfg(windows)]
     {
-        // Use GlobalMemoryStatusEx via raw WinAPI
         use std::mem;
 
         #[repr(C)]
@@ -207,9 +215,11 @@ fn total_memory() -> i64 {
             let mut status: MemoryStatusEx = mem::zeroed();
             status.length = mem::size_of::<MemoryStatusEx>() as u32;
             if GlobalMemoryStatusEx(&mut status) != 0 {
-                status.total_phys as i64
+                let total = status.total_phys as i64;
+                let used = total - status.avail_phys as i64;
+                (total, used)
             } else {
-                0
+                (0, 0)
             }
         }
     }
@@ -218,21 +228,149 @@ fn total_memory() -> i64 {
         std::fs::read_to_string("/proc/meminfo")
             .ok()
             .and_then(|contents| {
-                contents
-                    .lines()
-                    .find(|line| line.starts_with("MemTotal:"))
-                    .and_then(|line| {
-                        line.split_whitespace()
-                            .nth(1)
-                            .and_then(|v| v.parse::<i64>().ok())
-                    })
-                    .map(|kb| kb * 1024)
+                let mut total_kb: i64 = 0;
+                let mut available_kb: i64 = 0;
+                for line in contents.lines() {
+                    if line.starts_with("MemTotal:") {
+                        total_kb = line.split_whitespace().nth(1)
+                            .and_then(|v| v.parse().ok()).unwrap_or(0);
+                    } else if line.starts_with("MemAvailable:") {
+                        available_kb = line.split_whitespace().nth(1)
+                            .and_then(|v| v.parse().ok()).unwrap_or(0);
+                    }
+                }
+                if total_kb > 0 {
+                    Some((total_kb * 1024, (total_kb - available_kb) * 1024))
+                } else {
+                    None
+                }
             })
-            .unwrap_or(0)
+            .unwrap_or((0, 0))
     }
-    #[cfg(not(any(windows, target_os = "linux")))]
+    #[cfg(target_os = "macos")]
     {
-        0
+        // sysctl hw.memsize for total, vm_stat for used
+        let total = std::process::Command::new("sysctl")
+            .args(["-n", "hw.memsize"])
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<i64>().ok())
+            .unwrap_or(0);
+
+        // vm_stat reports pages; page size is typically 16384 on Apple Silicon, 4096 on Intel
+        let page_size = std::process::Command::new("sysctl")
+            .args(["-n", "hw.pagesize"])
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<i64>().ok())
+            .unwrap_or(4096);
+
+        let used = std::process::Command::new("vm_stat")
+            .output()
+            .ok()
+            .map(|o| {
+                let text = String::from_utf8_lossy(&o.stdout);
+                let mut active: i64 = 0;
+                let mut wired: i64 = 0;
+                let mut compressed: i64 = 0;
+                for line in text.lines() {
+                    let val = || -> Option<i64> {
+                        line.split(':').nth(1)?.trim().trim_end_matches('.').parse().ok()
+                    };
+                    if line.starts_with("Pages active") { active = val().unwrap_or(0); }
+                    else if line.starts_with("Pages wired") { wired = val().unwrap_or(0); }
+                    else if line.starts_with("Pages occupied by compressor") { compressed = val().unwrap_or(0); }
+                }
+                (active + wired + compressed) * page_size
+            })
+            .unwrap_or(0);
+
+        (total, used)
+    }
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+    {
+        (0, 0)
+    }
+}
+
+/// Returns CPU load as 0.0–1.0 by sampling /proc/stat over a short interval.
+fn cpu_load() -> f64 {
+    #[cfg(target_os = "linux")]
+    {
+        fn read_cpu_times() -> Option<(u64, u64)> {
+            let contents = std::fs::read_to_string("/proc/stat").ok()?;
+            let line = contents.lines().find(|l| l.starts_with("cpu "))?;
+            let vals: Vec<u64> = line.split_whitespace().skip(1)
+                .filter_map(|v| v.parse().ok()).collect();
+            if vals.len() < 4 { return None; }
+            let idle = vals[3];
+            let total: u64 = vals.iter().sum();
+            Some((total, idle))
+        }
+
+        if let (Some((t1, i1)), Some((t2, i2))) = (
+            read_cpu_times(),
+            {
+                std::thread::sleep(std::time::Duration::from_millis(200));
+                read_cpu_times()
+            },
+        ) {
+            let dt = t2.saturating_sub(t1);
+            let di = i2.saturating_sub(i1);
+            if dt > 0 { (dt - di) as f64 / dt as f64 } else { 0.0 }
+        } else {
+            0.0
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        // Use sysctl kern.cp_time (not available on all versions) or top
+        // Simplest: parse `sysctl -n vm.loadavg` and normalize by CPU count
+        let load1 = std::process::Command::new("sysctl")
+            .args(["-n", "vm.loadavg"])
+            .output()
+            .ok()
+            .and_then(|o| {
+                let s = String::from_utf8_lossy(&o.stdout);
+                // format: "{ 1.23 4.56 7.89 }"
+                s.trim().trim_start_matches('{').trim().split_whitespace()
+                    .next()
+                    .and_then(|v| v.parse::<f64>().ok())
+            })
+            .unwrap_or(0.0);
+        let cpus = num_cpus() as f64;
+        (load1 / cpus).min(1.0)
+    }
+    #[cfg(windows)]
+    {
+        // Simple approach: two snapshots of GetSystemTimes
+        #[repr(C)]
+        #[derive(Copy, Clone)]
+        struct FileTime { low: u32, high: u32 }
+        impl FileTime {
+            fn to_u64(self) -> u64 { (self.high as u64) << 32 | self.low as u64 }
+        }
+
+        unsafe extern "system" {
+            fn GetSystemTimes(idle: *mut FileTime, kernel: *mut FileTime, user: *mut FileTime) -> i32;
+        }
+
+        unsafe {
+            let (mut idle1, mut kern1, mut user1) = (std::mem::zeroed(), std::mem::zeroed(), std::mem::zeroed());
+            let (mut idle2, mut kern2, mut user2) = (std::mem::zeroed(), std::mem::zeroed(), std::mem::zeroed());
+
+            if GetSystemTimes(&mut idle1, &mut kern1, &mut user1) == 0 { return 0.0; }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            if GetSystemTimes(&mut idle2, &mut kern2, &mut user2) == 0 { return 0.0; }
+
+            let idle_d = idle2.to_u64() - idle1.to_u64();
+            let total_d = (kern2.to_u64() + user2.to_u64()) - (kern1.to_u64() + user1.to_u64());
+            if total_d > 0 { (total_d - idle_d) as f64 / total_d as f64 } else { 0.0 }
+        }
+    }
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+    {
+        0.0
     }
 }
 
