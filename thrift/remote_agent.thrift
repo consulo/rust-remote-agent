@@ -92,7 +92,39 @@ struct UserInfo {
 
 struct AgentInfo {
     1: required string agentId,       // e.g. "rust-remote-agent"
-    2: required string version        // e.g. "0.1.0"
+    2: required string version,       // e.g. "0.1.0"
+    3: required list<string> permissions  // expanded permission groups, e.g. ["fs", "process", "http"]
+}
+
+// ============================================================
+// HTTP Client
+// ============================================================
+
+struct HttpRequest {
+    1: required string method,
+    2: required string url,
+    3: optional map<string, string> headers,
+    4: optional binary body
+}
+
+struct HttpResponse {
+    1: required i32 statusCode,
+    2: required binary body,
+    3: optional map<string, string> headers
+}
+
+// ============================================================
+// WebSocket Proxy
+// ============================================================
+
+struct WebSocketMessage {
+    1: optional binary binaryData,
+    2: optional string textData
+}
+
+struct WebSocketData {
+    1: required list<WebSocketMessage> messages,
+    2: required bool connected
 }
 
 // ============================================================
@@ -220,5 +252,36 @@ service RemoteAgentService {
 
     SystemInfo getSystemInfo(),
 
-    UserInfo getUserInfo()
+    UserInfo getUserInfo(),
+
+    // --- HTTP Client ---
+
+    HttpResponse executeHttpRequest(
+        1: required HttpRequest request
+    ) throws (1: AgentException error),
+
+    // --- WebSocket Proxy ---
+
+    string connectWebSocket(
+        1: required string url,
+        2: optional map<string, string> headers
+    ) throws (1: AgentException error),
+
+    WebSocketData readWebSocketData(
+        1: required string sessionId
+    ) throws (1: AgentException error),
+
+    void sendWebSocketData(
+        1: required string sessionId,
+        2: optional binary binaryData,
+        3: optional string textData
+    ) throws (1: AgentException error),
+
+    void closeWebSocket(
+        1: required string sessionId
+    ) throws (1: AgentException error),
+
+    // --- Utility ---
+
+    i32 findFreePort() throws (1: AgentException error)
 }

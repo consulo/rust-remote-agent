@@ -63,9 +63,9 @@ struct Cli {
     #[arg(long, default_value_t = default_workspace())]
     workspace: String,
 
-    /// Run as a background daemon
-    #[arg(long)]
-    daemon: bool,
+    /// Comma-separated permission groups: fs,transfer,process,http,websocket,userinfo or * for all
+    #[arg(long, default_value = "*")]
+    permissions: String,
 }
 
 /// Detect the local LAN IP by opening a UDP socket to a public address.
@@ -82,13 +82,9 @@ fn main() {
     env_logger::init();
     let cli = Cli::parse();
 
-    if cli.daemon {
-        // TODO: platform-specific daemonization
-        log::warn!("Daemon mode not yet implemented, running in foreground");
-    }
-
     let listen_addr = format!("{}:{}", cli.host, cli.port);
     let workspace = cli.workspace;
+    let permissions = service::Permissions::parse(&cli.permissions);
 
     // Ensure workspace directory exists
     if let Err(e) = std::fs::create_dir_all(&workspace) {
@@ -104,12 +100,13 @@ fn main() {
     println!("listening on {}", listen_addr);
     println!("connect via: {}:{}", local_ip, cli.port);
     println!("workspace: {}", workspace);
+    println!("permissions: {}", permissions.display());
 
     // Flush stdout before server.listen() blocks
     use std::io::Write;
     let _ = std::io::stdout().flush();
 
-    let handler = AgentServiceHandler::new(workspace);
+    let handler = AgentServiceHandler::new(workspace, permissions);
     let processor = RemoteAgentServiceSyncProcessor::new(handler);
 
     let input_transport_factory = TBufferedReadTransportFactory::new();

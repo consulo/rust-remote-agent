@@ -59,6 +59,15 @@ public class TestClient {
             // --- Process ---
             testProcess(client);
 
+            // --- HTTP Client ---
+            testHttpClient(client);
+
+            // --- WebSocket Proxy ---
+            testWebSocket(client);
+
+            // --- Utility ---
+            testFindFreePort(client);
+
             System.out.println("\n=== All tests passed ===");
         }
         catch (Exception e) {
@@ -71,8 +80,9 @@ public class TestClient {
     private static void testAgentInfo(RemoteAgentService.Client client) throws TException {
         System.out.println("\n--- Agent Info ---");
         AgentInfo info = client.getAgentInfo();
-        System.out.println("  agentId: " + info.getAgentId());
-        System.out.println("  version: " + info.getVersion());
+        System.out.println("  agentId:     " + info.getAgentId());
+        System.out.println("  version:     " + info.getVersion());
+        System.out.println("  permissions: " + info.getPermissions());
     }
 
     private static void testWorkspace(RemoteAgentService.Client client) throws TException {
@@ -178,5 +188,90 @@ public class TestClient {
         // List processes
         List<ProcessInfo> processes = client.listProcesses();
         System.out.println("  tracked processes: " + processes.size());
+    }
+
+    private static void testHttpClient(RemoteAgentService.Client client) throws TException {
+        System.out.println("\n--- HTTP Client ---");
+
+        // Test GET
+        HttpRequest getReq = new HttpRequest();
+        getReq.setMethod("GET");
+        getReq.setUrl("https://httpbin.org/get");
+
+        HttpResponse getResp = client.executeHttpRequest(getReq);
+        System.out.println("  GET status: " + getResp.getStatusCode());
+        System.out.println("  GET body length: " + getResp.getBody().length + " bytes");
+        if (getResp.getHeaders() != null) {
+            System.out.println("  GET response headers: " + getResp.getHeaders().size());
+        }
+
+        // Test POST with body and headers
+        HttpRequest postReq = new HttpRequest();
+        postReq.setMethod("POST");
+        postReq.setUrl("https://httpbin.org/post");
+        postReq.setBody("{\"test\": true}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        postReq.setHeaders(java.util.Map.of("Content-Type", "application/json"));
+
+        HttpResponse postResp = client.executeHttpRequest(postReq);
+        System.out.println("  POST status: " + postResp.getStatusCode());
+        System.out.println("  POST body length: " + postResp.getBody().length + " bytes");
+
+        // Test DELETE
+        HttpRequest deleteReq = new HttpRequest();
+        deleteReq.setMethod("DELETE");
+        deleteReq.setUrl("https://httpbin.org/delete");
+
+        HttpResponse deleteResp = client.executeHttpRequest(deleteReq);
+        System.out.println("  DELETE status: " + deleteResp.getStatusCode());
+    }
+
+    private static void testFindFreePort(RemoteAgentService.Client client) throws TException {
+        System.out.println("\n--- Find Free Port ---");
+        int port = client.findFreePort();
+        System.out.println("  free port: " + port);
+        if (port <= 0 || port > 65535) {
+            throw new RuntimeException("Invalid port returned: " + port);
+        }
+    }
+
+    private static void testWebSocket(RemoteAgentService.Client client) throws TException {
+        System.out.println("\n--- WebSocket Proxy ---");
+
+        // Connect to a public echo server
+        String sessionId = client.connectWebSocket(
+            "wss://ws.postman-echo.com/raw",
+            new java.util.HashMap<>()
+        );
+        System.out.println("  connected: sessionId=" + sessionId);
+
+        // Send a text message
+        client.sendWebSocketData(sessionId, java.nio.ByteBuffer.allocate(0), "Hello from remote-agent!");
+        System.out.println("  sent text message");
+
+        // Poll for echo response
+        for (int i = 0; i < 30; i++) {
+            try { Thread.sleep(200); } catch (InterruptedException ignored) {}
+
+            WebSocketData data = client.readWebSocketData(sessionId);
+            if (!data.getMessages().isEmpty()) {
+                for (WebSocketMessage msg : data.getMessages()) {
+                    if (msg.isSetTextData()) {
+                        System.out.println("  received text: " + msg.getTextData());
+                    }
+                    if (msg.isSetBinaryData()) {
+                        System.out.println("  received binary: " + msg.getBinaryData().length + " bytes");
+                    }
+                }
+                break;
+            }
+            if (!data.isConnected()) {
+                System.out.println("  connection closed by remote");
+                break;
+            }
+        }
+
+        // Close
+        client.closeWebSocket(sessionId);
+        System.out.println("  closed session " + sessionId);
     }
 }
