@@ -97,6 +97,88 @@ impl Display for AgentException {
 }
 
 //
+// PermissionException
+//
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct PermissionException {
+  pub message: String,
+  pub permission: String,
+}
+
+impl PermissionException {
+  pub fn new(message: String, permission: String) -> PermissionException {
+    PermissionException {
+      message,
+      permission,
+    }
+  }
+}
+
+impl TSerializable for PermissionException {
+  fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<PermissionException> {
+    i_prot.read_struct_begin()?;
+    let mut f_1: Option<String> = None;
+    let mut f_2: Option<String> = None;
+    loop {
+      let field_ident = i_prot.read_field_begin()?;
+      if field_ident.field_type == TType::Stop {
+        break;
+      }
+      let field_id = field_id(&field_ident)?;
+      match field_id {
+        1 => {
+          let val = i_prot.read_string()?;
+          f_1 = Some(val);
+        },
+        2 => {
+          let val = i_prot.read_string()?;
+          f_2 = Some(val);
+        },
+        _ => {
+          i_prot.skip(field_ident.field_type)?;
+        },
+      };
+      i_prot.read_field_end()?;
+    }
+    i_prot.read_struct_end()?;
+    verify_required_field_exists("PermissionException.message", &f_1)?;
+    verify_required_field_exists("PermissionException.permission", &f_2)?;
+    let ret = PermissionException {
+      message: f_1.expect("auto-generated code should have checked for presence of required fields"),
+      permission: f_2.expect("auto-generated code should have checked for presence of required fields"),
+    };
+    Ok(ret)
+  }
+  fn write_to_out_protocol(&self, o_prot: &mut dyn TOutputProtocol) -> thrift::Result<()> {
+    let struct_ident = TStructIdentifier::new("PermissionException");
+    o_prot.write_struct_begin(&struct_ident)?;
+    o_prot.write_field_begin(&TFieldIdentifier::new("message", TType::String, 1))?;
+    o_prot.write_string(&self.message)?;
+    o_prot.write_field_end()?;
+    o_prot.write_field_begin(&TFieldIdentifier::new("permission", TType::String, 2))?;
+    o_prot.write_string(&self.permission)?;
+    o_prot.write_field_end()?;
+    o_prot.write_field_stop()?;
+    o_prot.write_struct_end()
+  }
+}
+
+impl Error for PermissionException {}
+
+impl From<PermissionException> for thrift::Error {
+  fn from(e: PermissionException) -> Self {
+    thrift::Error::User(Box::new(e))
+  }
+}
+
+impl Display for PermissionException {
+  fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    write!(f, "remote service threw PermissionException")
+  }
+}
+
+//
 // ProcessInfo
 //
 
@@ -2410,7 +2492,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("startProcess", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceStartProcessResult { result_value: Some(handler_return), error: None };
+        let ret = RemoteAgentServiceStartProcessResult { result_value: Some(handler_return), error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -2420,7 +2502,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceStartProcessResult{ result_value: None, error: Some(*err) };
+              let ret_err = RemoteAgentServiceStartProcessResult{ result_value: None, error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("startProcess", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceStartProcessResult{ result_value: None, error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("startProcess", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -2470,7 +2560,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("killProcess", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceKillProcessResult { result_value: Some(handler_return), error: None };
+        let ret = RemoteAgentServiceKillProcessResult { result_value: Some(handler_return), error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -2480,7 +2570,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceKillProcessResult{ result_value: None, error: Some(*err) };
+              let ret_err = RemoteAgentServiceKillProcessResult{ result_value: None, error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("killProcess", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceKillProcessResult{ result_value: None, error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("killProcess", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -2530,13 +2628,36 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("isProcessAlive", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceIsProcessAliveResult { result_value: Some(handler_return) };
+        let ret = RemoteAgentServiceIsProcessAliveResult { result_value: Some(handler_return), permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
       },
       Err(e) => {
         match e {
+          thrift::Error::User(usr_err) => {
+            if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceIsProcessAliveResult{ result_value: None, permission_error: Some(*err) };
+              let message_ident = TMessageIdentifier::new("isProcessAlive", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else {
+              let ret_err = {
+                ApplicationError::new(
+                  ApplicationErrorKind::Unknown,
+                  usr_err.to_string()
+                )
+              };
+              let message_ident = TMessageIdentifier::new("isProcessAlive", TMessageType::Exception, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              thrift::Error::write_application_error_to_out_protocol(&ret_err, o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            }
+          },
           thrift::Error::Application(app_err) => {
             let message_ident = TMessageIdentifier::new("isProcessAlive", TMessageType::Exception, incoming_sequence_number);
             o_prot.write_message_begin(&message_ident)?;
@@ -2567,13 +2688,36 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("listProcesses", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceListProcessesResult { result_value: Some(handler_return) };
+        let ret = RemoteAgentServiceListProcessesResult { result_value: Some(handler_return), permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
       },
       Err(e) => {
         match e {
+          thrift::Error::User(usr_err) => {
+            if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceListProcessesResult{ result_value: None, permission_error: Some(*err) };
+              let message_ident = TMessageIdentifier::new("listProcesses", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else {
+              let ret_err = {
+                ApplicationError::new(
+                  ApplicationErrorKind::Unknown,
+                  usr_err.to_string()
+                )
+              };
+              let message_ident = TMessageIdentifier::new("listProcesses", TMessageType::Exception, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              thrift::Error::write_application_error_to_out_protocol(&ret_err, o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            }
+          },
           thrift::Error::Application(app_err) => {
             let message_ident = TMessageIdentifier::new("listProcesses", TMessageType::Exception, incoming_sequence_number);
             o_prot.write_message_begin(&message_ident)?;
@@ -2604,7 +2748,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("readProcessOutput", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceReadProcessOutputResult { result_value: Some(handler_return), error: None };
+        let ret = RemoteAgentServiceReadProcessOutputResult { result_value: Some(handler_return), error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -2614,7 +2758,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceReadProcessOutputResult{ result_value: None, error: Some(*err) };
+              let ret_err = RemoteAgentServiceReadProcessOutputResult{ result_value: None, error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("readProcessOutput", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceReadProcessOutputResult{ result_value: None, error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("readProcessOutput", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -2664,7 +2816,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("readFile", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceReadFileResult { result_value: Some(handler_return), error: None };
+        let ret = RemoteAgentServiceReadFileResult { result_value: Some(handler_return), error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -2674,7 +2826,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceReadFileResult{ result_value: None, error: Some(*err) };
+              let ret_err = RemoteAgentServiceReadFileResult{ result_value: None, error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("readFile", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceReadFileResult{ result_value: None, error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("readFile", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -2724,7 +2884,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(_) => {
         let message_ident = TMessageIdentifier::new("writeFile", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceWriteFileResult { error: None };
+        let ret = RemoteAgentServiceWriteFileResult { error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -2734,7 +2894,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceWriteFileResult{ error: Some(*err) };
+              let ret_err = RemoteAgentServiceWriteFileResult{ error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("writeFile", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceWriteFileResult{ error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("writeFile", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -2784,7 +2952,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("deleteFile", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceDeleteFileResult { result_value: Some(handler_return), error: None };
+        let ret = RemoteAgentServiceDeleteFileResult { result_value: Some(handler_return), error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -2794,7 +2962,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceDeleteFileResult{ result_value: None, error: Some(*err) };
+              let ret_err = RemoteAgentServiceDeleteFileResult{ result_value: None, error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("deleteFile", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceDeleteFileResult{ result_value: None, error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("deleteFile", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -2844,7 +3020,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("listDirectory", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceListDirectoryResult { result_value: Some(handler_return), error: None };
+        let ret = RemoteAgentServiceListDirectoryResult { result_value: Some(handler_return), error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -2854,7 +3030,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceListDirectoryResult{ result_value: None, error: Some(*err) };
+              let ret_err = RemoteAgentServiceListDirectoryResult{ result_value: None, error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("listDirectory", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceListDirectoryResult{ result_value: None, error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("listDirectory", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -2904,13 +3088,36 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("fileExists", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceFileExistsResult { result_value: Some(handler_return) };
+        let ret = RemoteAgentServiceFileExistsResult { result_value: Some(handler_return), permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
       },
       Err(e) => {
         match e {
+          thrift::Error::User(usr_err) => {
+            if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceFileExistsResult{ result_value: None, permission_error: Some(*err) };
+              let message_ident = TMessageIdentifier::new("fileExists", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else {
+              let ret_err = {
+                ApplicationError::new(
+                  ApplicationErrorKind::Unknown,
+                  usr_err.to_string()
+                )
+              };
+              let message_ident = TMessageIdentifier::new("fileExists", TMessageType::Exception, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              thrift::Error::write_application_error_to_out_protocol(&ret_err, o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            }
+          },
           thrift::Error::Application(app_err) => {
             let message_ident = TMessageIdentifier::new("fileExists", TMessageType::Exception, incoming_sequence_number);
             o_prot.write_message_begin(&message_ident)?;
@@ -2941,7 +3148,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(_) => {
         let message_ident = TMessageIdentifier::new("createDirectory", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceCreateDirectoryResult { error: None };
+        let ret = RemoteAgentServiceCreateDirectoryResult { error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -2951,7 +3158,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceCreateDirectoryResult{ error: Some(*err) };
+              let ret_err = RemoteAgentServiceCreateDirectoryResult{ error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("createDirectory", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceCreateDirectoryResult{ error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("createDirectory", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -3001,13 +3216,36 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("listRoots", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceListRootsResult { result_value: Some(handler_return) };
+        let ret = RemoteAgentServiceListRootsResult { result_value: Some(handler_return), permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
       },
       Err(e) => {
         match e {
+          thrift::Error::User(usr_err) => {
+            if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceListRootsResult{ result_value: None, permission_error: Some(*err) };
+              let message_ident = TMessageIdentifier::new("listRoots", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else {
+              let ret_err = {
+                ApplicationError::new(
+                  ApplicationErrorKind::Unknown,
+                  usr_err.to_string()
+                )
+              };
+              let message_ident = TMessageIdentifier::new("listRoots", TMessageType::Exception, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              thrift::Error::write_application_error_to_out_protocol(&ret_err, o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            }
+          },
           thrift::Error::Application(app_err) => {
             let message_ident = TMessageIdentifier::new("listRoots", TMessageType::Exception, incoming_sequence_number);
             o_prot.write_message_begin(&message_ident)?;
@@ -3038,7 +3276,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("setPermissions", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceSetPermissionsResult { result_value: Some(handler_return), error: None };
+        let ret = RemoteAgentServiceSetPermissionsResult { result_value: Some(handler_return), error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -3048,7 +3286,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceSetPermissionsResult{ result_value: None, error: Some(*err) };
+              let ret_err = RemoteAgentServiceSetPermissionsResult{ result_value: None, error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("setPermissions", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceSetPermissionsResult{ result_value: None, error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("setPermissions", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -3098,7 +3344,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("beginUpload", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceBeginUploadResult { result_value: Some(handler_return), error: None };
+        let ret = RemoteAgentServiceBeginUploadResult { result_value: Some(handler_return), error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -3108,7 +3354,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceBeginUploadResult{ result_value: None, error: Some(*err) };
+              let ret_err = RemoteAgentServiceBeginUploadResult{ result_value: None, error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("beginUpload", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceBeginUploadResult{ result_value: None, error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("beginUpload", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -3158,7 +3412,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(_) => {
         let message_ident = TMessageIdentifier::new("uploadChunk", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceUploadChunkResult { error: None };
+        let ret = RemoteAgentServiceUploadChunkResult { error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -3168,7 +3422,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceUploadChunkResult{ error: Some(*err) };
+              let ret_err = RemoteAgentServiceUploadChunkResult{ error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("uploadChunk", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceUploadChunkResult{ error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("uploadChunk", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -3218,7 +3480,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(_) => {
         let message_ident = TMessageIdentifier::new("finishUpload", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceFinishUploadResult { error: None };
+        let ret = RemoteAgentServiceFinishUploadResult { error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -3228,7 +3490,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceFinishUploadResult{ error: Some(*err) };
+              let ret_err = RemoteAgentServiceFinishUploadResult{ error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("finishUpload", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceFinishUploadResult{ error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("finishUpload", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -3278,7 +3548,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(_) => {
         let message_ident = TMessageIdentifier::new("cancelUpload", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceCancelUploadResult { error: None };
+        let ret = RemoteAgentServiceCancelUploadResult { error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -3288,7 +3558,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceCancelUploadResult{ error: Some(*err) };
+              let ret_err = RemoteAgentServiceCancelUploadResult{ error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("cancelUpload", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceCancelUploadResult{ error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("cancelUpload", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -3338,7 +3616,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("beginDownload", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceBeginDownloadResult { result_value: Some(handler_return), error: None };
+        let ret = RemoteAgentServiceBeginDownloadResult { result_value: Some(handler_return), error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -3348,7 +3626,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceBeginDownloadResult{ result_value: None, error: Some(*err) };
+              let ret_err = RemoteAgentServiceBeginDownloadResult{ result_value: None, error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("beginDownload", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceBeginDownloadResult{ result_value: None, error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("beginDownload", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -3398,7 +3684,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("downloadChunk", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceDownloadChunkResult { result_value: Some(handler_return), error: None };
+        let ret = RemoteAgentServiceDownloadChunkResult { result_value: Some(handler_return), error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -3408,7 +3694,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceDownloadChunkResult{ result_value: None, error: Some(*err) };
+              let ret_err = RemoteAgentServiceDownloadChunkResult{ result_value: None, error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("downloadChunk", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceDownloadChunkResult{ result_value: None, error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("downloadChunk", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -3458,7 +3752,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(_) => {
         let message_ident = TMessageIdentifier::new("finishDownload", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceFinishDownloadResult { error: None };
+        let ret = RemoteAgentServiceFinishDownloadResult { error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -3468,7 +3762,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceFinishDownloadResult{ error: Some(*err) };
+              let ret_err = RemoteAgentServiceFinishDownloadResult{ error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("finishDownload", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceFinishDownloadResult{ error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("finishDownload", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -3629,7 +3931,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("getStat", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceGetStatResult { result_value: Some(handler_return), error: None };
+        let ret = RemoteAgentServiceGetStatResult { result_value: Some(handler_return), error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -3639,7 +3941,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceGetStatResult{ result_value: None, error: Some(*err) };
+              let ret_err = RemoteAgentServiceGetStatResult{ result_value: None, error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("getStat", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceGetStatResult{ result_value: None, error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("getStat", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -3689,13 +3999,36 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("getUserInfo", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceGetUserInfoResult { result_value: Some(handler_return) };
+        let ret = RemoteAgentServiceGetUserInfoResult { result_value: Some(handler_return), permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
       },
       Err(e) => {
         match e {
+          thrift::Error::User(usr_err) => {
+            if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceGetUserInfoResult{ result_value: None, permission_error: Some(*err) };
+              let message_ident = TMessageIdentifier::new("getUserInfo", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else {
+              let ret_err = {
+                ApplicationError::new(
+                  ApplicationErrorKind::Unknown,
+                  usr_err.to_string()
+                )
+              };
+              let message_ident = TMessageIdentifier::new("getUserInfo", TMessageType::Exception, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              thrift::Error::write_application_error_to_out_protocol(&ret_err, o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            }
+          },
           thrift::Error::Application(app_err) => {
             let message_ident = TMessageIdentifier::new("getUserInfo", TMessageType::Exception, incoming_sequence_number);
             o_prot.write_message_begin(&message_ident)?;
@@ -3726,7 +4059,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("executeHttpRequest", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceExecuteHttpRequestResult { result_value: Some(handler_return), error: None };
+        let ret = RemoteAgentServiceExecuteHttpRequestResult { result_value: Some(handler_return), error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -3736,7 +4069,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceExecuteHttpRequestResult{ result_value: None, error: Some(*err) };
+              let ret_err = RemoteAgentServiceExecuteHttpRequestResult{ result_value: None, error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("executeHttpRequest", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceExecuteHttpRequestResult{ result_value: None, error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("executeHttpRequest", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -3786,7 +4127,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("connectWebSocket", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceConnectWebSocketResult { result_value: Some(handler_return), error: None };
+        let ret = RemoteAgentServiceConnectWebSocketResult { result_value: Some(handler_return), error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -3796,7 +4137,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceConnectWebSocketResult{ result_value: None, error: Some(*err) };
+              let ret_err = RemoteAgentServiceConnectWebSocketResult{ result_value: None, error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("connectWebSocket", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceConnectWebSocketResult{ result_value: None, error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("connectWebSocket", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -3846,7 +4195,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(handler_return) => {
         let message_ident = TMessageIdentifier::new("readWebSocketData", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceReadWebSocketDataResult { result_value: Some(handler_return), error: None };
+        let ret = RemoteAgentServiceReadWebSocketDataResult { result_value: Some(handler_return), error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -3856,7 +4205,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceReadWebSocketDataResult{ result_value: None, error: Some(*err) };
+              let ret_err = RemoteAgentServiceReadWebSocketDataResult{ result_value: None, error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("readWebSocketData", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceReadWebSocketDataResult{ result_value: None, error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("readWebSocketData", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -3906,7 +4263,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(_) => {
         let message_ident = TMessageIdentifier::new("sendWebSocketData", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceSendWebSocketDataResult { error: None };
+        let ret = RemoteAgentServiceSendWebSocketDataResult { error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -3916,7 +4273,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceSendWebSocketDataResult{ error: Some(*err) };
+              let ret_err = RemoteAgentServiceSendWebSocketDataResult{ error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("sendWebSocketData", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceSendWebSocketDataResult{ error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("sendWebSocketData", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -3966,7 +4331,7 @@ impl TRemoteAgentServiceProcessFunctions {
       Ok(_) => {
         let message_ident = TMessageIdentifier::new("closeWebSocket", TMessageType::Reply, incoming_sequence_number);
         o_prot.write_message_begin(&message_ident)?;
-        let ret = RemoteAgentServiceCloseWebSocketResult { error: None };
+        let ret = RemoteAgentServiceCloseWebSocketResult { error: None, permission_error: None };
         ret.write_to_out_protocol(o_prot)?;
         o_prot.write_message_end()?;
         o_prot.flush()
@@ -3976,7 +4341,15 @@ impl TRemoteAgentServiceProcessFunctions {
           thrift::Error::User(usr_err) => {
             if usr_err.downcast_ref::<AgentException>().is_some() {
               let err = usr_err.downcast::<AgentException>().expect("downcast already checked");
-              let ret_err = RemoteAgentServiceCloseWebSocketResult{ error: Some(*err) };
+              let ret_err = RemoteAgentServiceCloseWebSocketResult{ error: Some(*err), permission_error: None };
+              let message_ident = TMessageIdentifier::new("closeWebSocket", TMessageType::Reply, incoming_sequence_number);
+              o_prot.write_message_begin(&message_ident)?;
+              ret_err.write_to_out_protocol(o_prot)?;
+              o_prot.write_message_end()?;
+              o_prot.flush()
+            } else if usr_err.downcast_ref::<PermissionException>().is_some() {
+              let err = usr_err.downcast::<PermissionException>().expect("downcast already checked");
+              let ret_err = RemoteAgentServiceCloseWebSocketResult{ error: None, permission_error: Some(*err) };
               let message_ident = TMessageIdentifier::new("closeWebSocket", TMessageType::Reply, incoming_sequence_number);
               o_prot.write_message_begin(&message_ident)?;
               ret_err.write_to_out_protocol(o_prot)?;
@@ -4499,12 +4872,15 @@ impl RemoteAgentServiceStartProcessArgs {
 struct RemoteAgentServiceStartProcessResult {
   result_value: Option<ProcessInfo>,
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceStartProcessResult {
   fn ok_or(self) -> thrift::Result<ProcessInfo> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else if self.result_value.is_some() {
       Ok(self.result_value.unwrap())
     } else {
@@ -4522,6 +4898,7 @@ impl RemoteAgentServiceStartProcessResult {
     i_prot.read_struct_begin()?;
     let mut f_0: Option<ProcessInfo> = None;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -4537,6 +4914,10 @@ impl RemoteAgentServiceStartProcessResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -4547,6 +4928,7 @@ impl RemoteAgentServiceStartProcessResult {
     let ret = RemoteAgentServiceStartProcessResult {
       result_value: f_0,
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -4560,6 +4942,11 @@ impl RemoteAgentServiceStartProcessResult {
     }
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -4635,12 +5022,15 @@ impl RemoteAgentServiceKillProcessArgs {
 struct RemoteAgentServiceKillProcessResult {
   result_value: Option<bool>,
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceKillProcessResult {
   fn ok_or(self) -> thrift::Result<bool> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else if self.result_value.is_some() {
       Ok(self.result_value.unwrap())
     } else {
@@ -4658,6 +5048,7 @@ impl RemoteAgentServiceKillProcessResult {
     i_prot.read_struct_begin()?;
     let mut f_0: Option<bool> = None;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -4673,6 +5064,10 @@ impl RemoteAgentServiceKillProcessResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -4683,6 +5078,7 @@ impl RemoteAgentServiceKillProcessResult {
     let ret = RemoteAgentServiceKillProcessResult {
       result_value: f_0,
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -4696,6 +5092,11 @@ impl RemoteAgentServiceKillProcessResult {
     }
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -4759,11 +5160,14 @@ impl RemoteAgentServiceIsProcessAliveArgs {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct RemoteAgentServiceIsProcessAliveResult {
   result_value: Option<bool>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceIsProcessAliveResult {
   fn ok_or(self) -> thrift::Result<bool> {
-    if self.result_value.is_some() {
+    if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
+    } else if self.result_value.is_some() {
       Ok(self.result_value.unwrap())
     } else {
       Err(
@@ -4779,6 +5183,7 @@ impl RemoteAgentServiceIsProcessAliveResult {
   fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<RemoteAgentServiceIsProcessAliveResult> {
     i_prot.read_struct_begin()?;
     let mut f_0: Option<bool> = None;
+    let mut f_1: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -4790,6 +5195,10 @@ impl RemoteAgentServiceIsProcessAliveResult {
           let val = i_prot.read_bool()?;
           f_0 = Some(val);
         },
+        1 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_1 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -4799,6 +5208,7 @@ impl RemoteAgentServiceIsProcessAliveResult {
     i_prot.read_struct_end()?;
     let ret = RemoteAgentServiceIsProcessAliveResult {
       result_value: f_0,
+      permission_error: f_1,
     };
     Ok(ret)
   }
@@ -4808,6 +5218,11 @@ impl RemoteAgentServiceIsProcessAliveResult {
     if let Some(fld_var) = self.result_value {
       o_prot.write_field_begin(&TFieldIdentifier::new("result_value", TType::Bool, 0))?;
       o_prot.write_bool(fld_var)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
     o_prot.write_field_stop()?;
@@ -4853,11 +5268,14 @@ impl RemoteAgentServiceListProcessesArgs {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct RemoteAgentServiceListProcessesResult {
   result_value: Option<Vec<ProcessInfo>>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceListProcessesResult {
   fn ok_or(self) -> thrift::Result<Vec<ProcessInfo>> {
-    if self.result_value.is_some() {
+    if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
+    } else if self.result_value.is_some() {
       Ok(self.result_value.unwrap())
     } else {
       Err(
@@ -4873,6 +5291,7 @@ impl RemoteAgentServiceListProcessesResult {
   fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<RemoteAgentServiceListProcessesResult> {
     i_prot.read_struct_begin()?;
     let mut f_0: Option<Vec<ProcessInfo>> = None;
+    let mut f_1: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -4890,6 +5309,10 @@ impl RemoteAgentServiceListProcessesResult {
           i_prot.read_list_end()?;
           f_0 = Some(val);
         },
+        1 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_1 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -4899,6 +5322,7 @@ impl RemoteAgentServiceListProcessesResult {
     i_prot.read_struct_end()?;
     let ret = RemoteAgentServiceListProcessesResult {
       result_value: f_0,
+      permission_error: f_1,
     };
     Ok(ret)
   }
@@ -4912,6 +5336,11 @@ impl RemoteAgentServiceListProcessesResult {
         e.write_to_out_protocol(o_prot)?;
       }
       o_prot.write_list_end()?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
     o_prot.write_field_stop()?;
@@ -4975,12 +5404,15 @@ impl RemoteAgentServiceReadProcessOutputArgs {
 struct RemoteAgentServiceReadProcessOutputResult {
   result_value: Option<ProcessOutput>,
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceReadProcessOutputResult {
   fn ok_or(self) -> thrift::Result<ProcessOutput> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else if self.result_value.is_some() {
       Ok(self.result_value.unwrap())
     } else {
@@ -4998,6 +5430,7 @@ impl RemoteAgentServiceReadProcessOutputResult {
     i_prot.read_struct_begin()?;
     let mut f_0: Option<ProcessOutput> = None;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -5013,6 +5446,10 @@ impl RemoteAgentServiceReadProcessOutputResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -5023,6 +5460,7 @@ impl RemoteAgentServiceReadProcessOutputResult {
     let ret = RemoteAgentServiceReadProcessOutputResult {
       result_value: f_0,
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -5036,6 +5474,11 @@ impl RemoteAgentServiceReadProcessOutputResult {
     }
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -5100,12 +5543,15 @@ impl RemoteAgentServiceReadFileArgs {
 struct RemoteAgentServiceReadFileResult {
   result_value: Option<Vec<u8>>,
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceReadFileResult {
   fn ok_or(self) -> thrift::Result<Vec<u8>> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else if self.result_value.is_some() {
       Ok(self.result_value.unwrap())
     } else {
@@ -5123,6 +5569,7 @@ impl RemoteAgentServiceReadFileResult {
     i_prot.read_struct_begin()?;
     let mut f_0: Option<Vec<u8>> = None;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -5138,6 +5585,10 @@ impl RemoteAgentServiceReadFileResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -5148,6 +5599,7 @@ impl RemoteAgentServiceReadFileResult {
     let ret = RemoteAgentServiceReadFileResult {
       result_value: f_0,
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -5161,6 +5613,11 @@ impl RemoteAgentServiceReadFileResult {
     }
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -5235,12 +5692,15 @@ impl RemoteAgentServiceWriteFileArgs {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct RemoteAgentServiceWriteFileResult {
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceWriteFileResult {
   fn ok_or(self) -> thrift::Result<()> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else {
       Ok(())
     }
@@ -5248,6 +5708,7 @@ impl RemoteAgentServiceWriteFileResult {
   fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<RemoteAgentServiceWriteFileResult> {
     i_prot.read_struct_begin()?;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -5259,6 +5720,10 @@ impl RemoteAgentServiceWriteFileResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -5268,6 +5733,7 @@ impl RemoteAgentServiceWriteFileResult {
     i_prot.read_struct_end()?;
     let ret = RemoteAgentServiceWriteFileResult {
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -5276,6 +5742,11 @@ impl RemoteAgentServiceWriteFileResult {
     o_prot.write_struct_begin(&struct_ident)?;
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -5340,12 +5811,15 @@ impl RemoteAgentServiceDeleteFileArgs {
 struct RemoteAgentServiceDeleteFileResult {
   result_value: Option<bool>,
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceDeleteFileResult {
   fn ok_or(self) -> thrift::Result<bool> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else if self.result_value.is_some() {
       Ok(self.result_value.unwrap())
     } else {
@@ -5363,6 +5837,7 @@ impl RemoteAgentServiceDeleteFileResult {
     i_prot.read_struct_begin()?;
     let mut f_0: Option<bool> = None;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -5378,6 +5853,10 @@ impl RemoteAgentServiceDeleteFileResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -5388,6 +5867,7 @@ impl RemoteAgentServiceDeleteFileResult {
     let ret = RemoteAgentServiceDeleteFileResult {
       result_value: f_0,
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -5401,6 +5881,11 @@ impl RemoteAgentServiceDeleteFileResult {
     }
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -5465,12 +5950,15 @@ impl RemoteAgentServiceListDirectoryArgs {
 struct RemoteAgentServiceListDirectoryResult {
   result_value: Option<Vec<FileInfo>>,
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceListDirectoryResult {
   fn ok_or(self) -> thrift::Result<Vec<FileInfo>> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else if self.result_value.is_some() {
       Ok(self.result_value.unwrap())
     } else {
@@ -5488,6 +5976,7 @@ impl RemoteAgentServiceListDirectoryResult {
     i_prot.read_struct_begin()?;
     let mut f_0: Option<Vec<FileInfo>> = None;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -5509,6 +5998,10 @@ impl RemoteAgentServiceListDirectoryResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -5519,6 +6012,7 @@ impl RemoteAgentServiceListDirectoryResult {
     let ret = RemoteAgentServiceListDirectoryResult {
       result_value: f_0,
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -5536,6 +6030,11 @@ impl RemoteAgentServiceListDirectoryResult {
     }
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -5599,11 +6098,14 @@ impl RemoteAgentServiceFileExistsArgs {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct RemoteAgentServiceFileExistsResult {
   result_value: Option<bool>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceFileExistsResult {
   fn ok_or(self) -> thrift::Result<bool> {
-    if self.result_value.is_some() {
+    if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
+    } else if self.result_value.is_some() {
       Ok(self.result_value.unwrap())
     } else {
       Err(
@@ -5619,6 +6121,7 @@ impl RemoteAgentServiceFileExistsResult {
   fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<RemoteAgentServiceFileExistsResult> {
     i_prot.read_struct_begin()?;
     let mut f_0: Option<bool> = None;
+    let mut f_1: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -5630,6 +6133,10 @@ impl RemoteAgentServiceFileExistsResult {
           let val = i_prot.read_bool()?;
           f_0 = Some(val);
         },
+        1 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_1 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -5639,6 +6146,7 @@ impl RemoteAgentServiceFileExistsResult {
     i_prot.read_struct_end()?;
     let ret = RemoteAgentServiceFileExistsResult {
       result_value: f_0,
+      permission_error: f_1,
     };
     Ok(ret)
   }
@@ -5648,6 +6156,11 @@ impl RemoteAgentServiceFileExistsResult {
     if let Some(fld_var) = self.result_value {
       o_prot.write_field_begin(&TFieldIdentifier::new("result_value", TType::Bool, 0))?;
       o_prot.write_bool(fld_var)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
     o_prot.write_field_stop()?;
@@ -5721,12 +6234,15 @@ impl RemoteAgentServiceCreateDirectoryArgs {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct RemoteAgentServiceCreateDirectoryResult {
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceCreateDirectoryResult {
   fn ok_or(self) -> thrift::Result<()> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else {
       Ok(())
     }
@@ -5734,6 +6250,7 @@ impl RemoteAgentServiceCreateDirectoryResult {
   fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<RemoteAgentServiceCreateDirectoryResult> {
     i_prot.read_struct_begin()?;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -5745,6 +6262,10 @@ impl RemoteAgentServiceCreateDirectoryResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -5754,6 +6275,7 @@ impl RemoteAgentServiceCreateDirectoryResult {
     i_prot.read_struct_end()?;
     let ret = RemoteAgentServiceCreateDirectoryResult {
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -5762,6 +6284,11 @@ impl RemoteAgentServiceCreateDirectoryResult {
     o_prot.write_struct_begin(&struct_ident)?;
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -5808,11 +6335,14 @@ impl RemoteAgentServiceListRootsArgs {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct RemoteAgentServiceListRootsResult {
   result_value: Option<Vec<FileInfo>>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceListRootsResult {
   fn ok_or(self) -> thrift::Result<Vec<FileInfo>> {
-    if self.result_value.is_some() {
+    if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
+    } else if self.result_value.is_some() {
       Ok(self.result_value.unwrap())
     } else {
       Err(
@@ -5828,6 +6358,7 @@ impl RemoteAgentServiceListRootsResult {
   fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<RemoteAgentServiceListRootsResult> {
     i_prot.read_struct_begin()?;
     let mut f_0: Option<Vec<FileInfo>> = None;
+    let mut f_1: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -5845,6 +6376,10 @@ impl RemoteAgentServiceListRootsResult {
           i_prot.read_list_end()?;
           f_0 = Some(val);
         },
+        1 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_1 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -5854,6 +6389,7 @@ impl RemoteAgentServiceListRootsResult {
     i_prot.read_struct_end()?;
     let ret = RemoteAgentServiceListRootsResult {
       result_value: f_0,
+      permission_error: f_1,
     };
     Ok(ret)
   }
@@ -5867,6 +6403,11 @@ impl RemoteAgentServiceListRootsResult {
         e.write_to_out_protocol(o_prot)?;
       }
       o_prot.write_list_end()?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
     o_prot.write_field_stop()?;
@@ -5941,12 +6482,15 @@ impl RemoteAgentServiceSetPermissionsArgs {
 struct RemoteAgentServiceSetPermissionsResult {
   result_value: Option<bool>,
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceSetPermissionsResult {
   fn ok_or(self) -> thrift::Result<bool> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else if self.result_value.is_some() {
       Ok(self.result_value.unwrap())
     } else {
@@ -5964,6 +6508,7 @@ impl RemoteAgentServiceSetPermissionsResult {
     i_prot.read_struct_begin()?;
     let mut f_0: Option<bool> = None;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -5979,6 +6524,10 @@ impl RemoteAgentServiceSetPermissionsResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -5989,6 +6538,7 @@ impl RemoteAgentServiceSetPermissionsResult {
     let ret = RemoteAgentServiceSetPermissionsResult {
       result_value: f_0,
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -6002,6 +6552,11 @@ impl RemoteAgentServiceSetPermissionsResult {
     }
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -6077,12 +6632,15 @@ impl RemoteAgentServiceBeginUploadArgs {
 struct RemoteAgentServiceBeginUploadResult {
   result_value: Option<String>,
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceBeginUploadResult {
   fn ok_or(self) -> thrift::Result<String> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else if self.result_value.is_some() {
       Ok(self.result_value.unwrap())
     } else {
@@ -6100,6 +6658,7 @@ impl RemoteAgentServiceBeginUploadResult {
     i_prot.read_struct_begin()?;
     let mut f_0: Option<String> = None;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -6115,6 +6674,10 @@ impl RemoteAgentServiceBeginUploadResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -6125,6 +6688,7 @@ impl RemoteAgentServiceBeginUploadResult {
     let ret = RemoteAgentServiceBeginUploadResult {
       result_value: f_0,
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -6138,6 +6702,11 @@ impl RemoteAgentServiceBeginUploadResult {
     }
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -6212,12 +6781,15 @@ impl RemoteAgentServiceUploadChunkArgs {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct RemoteAgentServiceUploadChunkResult {
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceUploadChunkResult {
   fn ok_or(self) -> thrift::Result<()> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else {
       Ok(())
     }
@@ -6225,6 +6797,7 @@ impl RemoteAgentServiceUploadChunkResult {
   fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<RemoteAgentServiceUploadChunkResult> {
     i_prot.read_struct_begin()?;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -6236,6 +6809,10 @@ impl RemoteAgentServiceUploadChunkResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -6245,6 +6822,7 @@ impl RemoteAgentServiceUploadChunkResult {
     i_prot.read_struct_end()?;
     let ret = RemoteAgentServiceUploadChunkResult {
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -6253,6 +6831,11 @@ impl RemoteAgentServiceUploadChunkResult {
     o_prot.write_struct_begin(&struct_ident)?;
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -6316,12 +6899,15 @@ impl RemoteAgentServiceFinishUploadArgs {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct RemoteAgentServiceFinishUploadResult {
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceFinishUploadResult {
   fn ok_or(self) -> thrift::Result<()> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else {
       Ok(())
     }
@@ -6329,6 +6915,7 @@ impl RemoteAgentServiceFinishUploadResult {
   fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<RemoteAgentServiceFinishUploadResult> {
     i_prot.read_struct_begin()?;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -6340,6 +6927,10 @@ impl RemoteAgentServiceFinishUploadResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -6349,6 +6940,7 @@ impl RemoteAgentServiceFinishUploadResult {
     i_prot.read_struct_end()?;
     let ret = RemoteAgentServiceFinishUploadResult {
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -6357,6 +6949,11 @@ impl RemoteAgentServiceFinishUploadResult {
     o_prot.write_struct_begin(&struct_ident)?;
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -6420,12 +7017,15 @@ impl RemoteAgentServiceCancelUploadArgs {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct RemoteAgentServiceCancelUploadResult {
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceCancelUploadResult {
   fn ok_or(self) -> thrift::Result<()> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else {
       Ok(())
     }
@@ -6433,6 +7033,7 @@ impl RemoteAgentServiceCancelUploadResult {
   fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<RemoteAgentServiceCancelUploadResult> {
     i_prot.read_struct_begin()?;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -6444,6 +7045,10 @@ impl RemoteAgentServiceCancelUploadResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -6453,6 +7058,7 @@ impl RemoteAgentServiceCancelUploadResult {
     i_prot.read_struct_end()?;
     let ret = RemoteAgentServiceCancelUploadResult {
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -6461,6 +7067,11 @@ impl RemoteAgentServiceCancelUploadResult {
     o_prot.write_struct_begin(&struct_ident)?;
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -6525,12 +7136,15 @@ impl RemoteAgentServiceBeginDownloadArgs {
 struct RemoteAgentServiceBeginDownloadResult {
   result_value: Option<DownloadInfo>,
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceBeginDownloadResult {
   fn ok_or(self) -> thrift::Result<DownloadInfo> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else if self.result_value.is_some() {
       Ok(self.result_value.unwrap())
     } else {
@@ -6548,6 +7162,7 @@ impl RemoteAgentServiceBeginDownloadResult {
     i_prot.read_struct_begin()?;
     let mut f_0: Option<DownloadInfo> = None;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -6563,6 +7178,10 @@ impl RemoteAgentServiceBeginDownloadResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -6573,6 +7192,7 @@ impl RemoteAgentServiceBeginDownloadResult {
     let ret = RemoteAgentServiceBeginDownloadResult {
       result_value: f_0,
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -6586,6 +7206,11 @@ impl RemoteAgentServiceBeginDownloadResult {
     }
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -6661,12 +7286,15 @@ impl RemoteAgentServiceDownloadChunkArgs {
 struct RemoteAgentServiceDownloadChunkResult {
   result_value: Option<Vec<u8>>,
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceDownloadChunkResult {
   fn ok_or(self) -> thrift::Result<Vec<u8>> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else if self.result_value.is_some() {
       Ok(self.result_value.unwrap())
     } else {
@@ -6684,6 +7312,7 @@ impl RemoteAgentServiceDownloadChunkResult {
     i_prot.read_struct_begin()?;
     let mut f_0: Option<Vec<u8>> = None;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -6699,6 +7328,10 @@ impl RemoteAgentServiceDownloadChunkResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -6709,6 +7342,7 @@ impl RemoteAgentServiceDownloadChunkResult {
     let ret = RemoteAgentServiceDownloadChunkResult {
       result_value: f_0,
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -6722,6 +7356,11 @@ impl RemoteAgentServiceDownloadChunkResult {
     }
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -6785,12 +7424,15 @@ impl RemoteAgentServiceFinishDownloadArgs {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct RemoteAgentServiceFinishDownloadResult {
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceFinishDownloadResult {
   fn ok_or(self) -> thrift::Result<()> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else {
       Ok(())
     }
@@ -6798,6 +7440,7 @@ impl RemoteAgentServiceFinishDownloadResult {
   fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<RemoteAgentServiceFinishDownloadResult> {
     i_prot.read_struct_begin()?;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -6809,6 +7452,10 @@ impl RemoteAgentServiceFinishDownloadResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -6818,6 +7465,7 @@ impl RemoteAgentServiceFinishDownloadResult {
     i_prot.read_struct_end()?;
     let ret = RemoteAgentServiceFinishDownloadResult {
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -6826,6 +7474,11 @@ impl RemoteAgentServiceFinishDownloadResult {
     o_prot.write_struct_begin(&struct_ident)?;
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -7184,12 +7837,15 @@ impl RemoteAgentServiceGetStatArgs {
 struct RemoteAgentServiceGetStatResult {
   result_value: Option<StatInfo>,
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceGetStatResult {
   fn ok_or(self) -> thrift::Result<StatInfo> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else if self.result_value.is_some() {
       Ok(self.result_value.unwrap())
     } else {
@@ -7207,6 +7863,7 @@ impl RemoteAgentServiceGetStatResult {
     i_prot.read_struct_begin()?;
     let mut f_0: Option<StatInfo> = None;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -7222,6 +7879,10 @@ impl RemoteAgentServiceGetStatResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -7232,6 +7893,7 @@ impl RemoteAgentServiceGetStatResult {
     let ret = RemoteAgentServiceGetStatResult {
       result_value: f_0,
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -7245,6 +7907,11 @@ impl RemoteAgentServiceGetStatResult {
     }
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -7291,11 +7958,14 @@ impl RemoteAgentServiceGetUserInfoArgs {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct RemoteAgentServiceGetUserInfoResult {
   result_value: Option<UserInfo>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceGetUserInfoResult {
   fn ok_or(self) -> thrift::Result<UserInfo> {
-    if self.result_value.is_some() {
+    if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
+    } else if self.result_value.is_some() {
       Ok(self.result_value.unwrap())
     } else {
       Err(
@@ -7311,6 +7981,7 @@ impl RemoteAgentServiceGetUserInfoResult {
   fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<RemoteAgentServiceGetUserInfoResult> {
     i_prot.read_struct_begin()?;
     let mut f_0: Option<UserInfo> = None;
+    let mut f_1: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -7322,6 +7993,10 @@ impl RemoteAgentServiceGetUserInfoResult {
           let val = UserInfo::read_from_in_protocol(i_prot)?;
           f_0 = Some(val);
         },
+        1 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_1 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -7331,6 +8006,7 @@ impl RemoteAgentServiceGetUserInfoResult {
     i_prot.read_struct_end()?;
     let ret = RemoteAgentServiceGetUserInfoResult {
       result_value: f_0,
+      permission_error: f_1,
     };
     Ok(ret)
   }
@@ -7339,6 +8015,11 @@ impl RemoteAgentServiceGetUserInfoResult {
     o_prot.write_struct_begin(&struct_ident)?;
     if let Some(ref fld_var) = self.result_value {
       o_prot.write_field_begin(&TFieldIdentifier::new("result_value", TType::Struct, 0))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 1))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -7403,12 +8084,15 @@ impl RemoteAgentServiceExecuteHttpRequestArgs {
 struct RemoteAgentServiceExecuteHttpRequestResult {
   result_value: Option<HttpResponse>,
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceExecuteHttpRequestResult {
   fn ok_or(self) -> thrift::Result<HttpResponse> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else if self.result_value.is_some() {
       Ok(self.result_value.unwrap())
     } else {
@@ -7426,6 +8110,7 @@ impl RemoteAgentServiceExecuteHttpRequestResult {
     i_prot.read_struct_begin()?;
     let mut f_0: Option<HttpResponse> = None;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -7441,6 +8126,10 @@ impl RemoteAgentServiceExecuteHttpRequestResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -7451,6 +8140,7 @@ impl RemoteAgentServiceExecuteHttpRequestResult {
     let ret = RemoteAgentServiceExecuteHttpRequestResult {
       result_value: f_0,
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -7464,6 +8154,11 @@ impl RemoteAgentServiceExecuteHttpRequestResult {
     }
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -7551,12 +8246,15 @@ impl RemoteAgentServiceConnectWebSocketArgs {
 struct RemoteAgentServiceConnectWebSocketResult {
   result_value: Option<String>,
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceConnectWebSocketResult {
   fn ok_or(self) -> thrift::Result<String> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else if self.result_value.is_some() {
       Ok(self.result_value.unwrap())
     } else {
@@ -7574,6 +8272,7 @@ impl RemoteAgentServiceConnectWebSocketResult {
     i_prot.read_struct_begin()?;
     let mut f_0: Option<String> = None;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -7589,6 +8288,10 @@ impl RemoteAgentServiceConnectWebSocketResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -7599,6 +8302,7 @@ impl RemoteAgentServiceConnectWebSocketResult {
     let ret = RemoteAgentServiceConnectWebSocketResult {
       result_value: f_0,
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -7612,6 +8316,11 @@ impl RemoteAgentServiceConnectWebSocketResult {
     }
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -7676,12 +8385,15 @@ impl RemoteAgentServiceReadWebSocketDataArgs {
 struct RemoteAgentServiceReadWebSocketDataResult {
   result_value: Option<WebSocketData>,
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceReadWebSocketDataResult {
   fn ok_or(self) -> thrift::Result<WebSocketData> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else if self.result_value.is_some() {
       Ok(self.result_value.unwrap())
     } else {
@@ -7699,6 +8411,7 @@ impl RemoteAgentServiceReadWebSocketDataResult {
     i_prot.read_struct_begin()?;
     let mut f_0: Option<WebSocketData> = None;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -7714,6 +8427,10 @@ impl RemoteAgentServiceReadWebSocketDataResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -7724,6 +8441,7 @@ impl RemoteAgentServiceReadWebSocketDataResult {
     let ret = RemoteAgentServiceReadWebSocketDataResult {
       result_value: f_0,
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -7737,6 +8455,11 @@ impl RemoteAgentServiceReadWebSocketDataResult {
     }
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -7822,12 +8545,15 @@ impl RemoteAgentServiceSendWebSocketDataArgs {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct RemoteAgentServiceSendWebSocketDataResult {
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceSendWebSocketDataResult {
   fn ok_or(self) -> thrift::Result<()> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else {
       Ok(())
     }
@@ -7835,6 +8561,7 @@ impl RemoteAgentServiceSendWebSocketDataResult {
   fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<RemoteAgentServiceSendWebSocketDataResult> {
     i_prot.read_struct_begin()?;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -7846,6 +8573,10 @@ impl RemoteAgentServiceSendWebSocketDataResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -7855,6 +8586,7 @@ impl RemoteAgentServiceSendWebSocketDataResult {
     i_prot.read_struct_end()?;
     let ret = RemoteAgentServiceSendWebSocketDataResult {
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -7863,6 +8595,11 @@ impl RemoteAgentServiceSendWebSocketDataResult {
     o_prot.write_struct_begin(&struct_ident)?;
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }
@@ -7926,12 +8663,15 @@ impl RemoteAgentServiceCloseWebSocketArgs {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct RemoteAgentServiceCloseWebSocketResult {
   error: Option<AgentException>,
+  permission_error: Option<PermissionException>,
 }
 
 impl RemoteAgentServiceCloseWebSocketResult {
   fn ok_or(self) -> thrift::Result<()> {
     if self.error.is_some() {
       Err(thrift::Error::User(Box::new(self.error.unwrap())))
+    } else if self.permission_error.is_some() {
+      Err(thrift::Error::User(Box::new(self.permission_error.unwrap())))
     } else {
       Ok(())
     }
@@ -7939,6 +8679,7 @@ impl RemoteAgentServiceCloseWebSocketResult {
   fn read_from_in_protocol(i_prot: &mut dyn TInputProtocol) -> thrift::Result<RemoteAgentServiceCloseWebSocketResult> {
     i_prot.read_struct_begin()?;
     let mut f_1: Option<AgentException> = None;
+    let mut f_2: Option<PermissionException> = None;
     loop {
       let field_ident = i_prot.read_field_begin()?;
       if field_ident.field_type == TType::Stop {
@@ -7950,6 +8691,10 @@ impl RemoteAgentServiceCloseWebSocketResult {
           let val = AgentException::read_from_in_protocol(i_prot)?;
           f_1 = Some(val);
         },
+        2 => {
+          let val = PermissionException::read_from_in_protocol(i_prot)?;
+          f_2 = Some(val);
+        },
         _ => {
           i_prot.skip(field_ident.field_type)?;
         },
@@ -7959,6 +8704,7 @@ impl RemoteAgentServiceCloseWebSocketResult {
     i_prot.read_struct_end()?;
     let ret = RemoteAgentServiceCloseWebSocketResult {
       error: f_1,
+      permission_error: f_2,
     };
     Ok(ret)
   }
@@ -7967,6 +8713,11 @@ impl RemoteAgentServiceCloseWebSocketResult {
     o_prot.write_struct_begin(&struct_ident)?;
     if let Some(ref fld_var) = self.error {
       o_prot.write_field_begin(&TFieldIdentifier::new("error", TType::Struct, 1))?;
+      fld_var.write_to_out_protocol(o_prot)?;
+      o_prot.write_field_end()?
+    }
+    if let Some(ref fld_var) = self.permission_error {
+      o_prot.write_field_begin(&TFieldIdentifier::new("permissionError", TType::Struct, 2))?;
       fld_var.write_to_out_protocol(o_prot)?;
       o_prot.write_field_end()?
     }

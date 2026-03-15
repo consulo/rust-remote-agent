@@ -25,6 +25,11 @@ exception AgentException {
     1: required string message
 }
 
+exception PermissionException {
+    1: required string message,
+    2: required string permission   // the permission that was denied (e.g. "fs", "process")
+}
+
 // ============================================================
 // Process Management
 // ============================================================
@@ -154,63 +159,65 @@ service RemoteAgentService {
         2: required list<string> arguments,
         3: optional string workingDirectory,
         4: optional map<string, string> environment
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     // force=false: SIGTERM / Ctrl+C (graceful)
     // force=true:  SIGKILL / TerminateProcess (hard)
     bool killProcess(
         1: required i64 pid,
         2: required bool force
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     bool isProcessAlive(
         1: required i64 pid
-    ),
+    ) throws (1: PermissionException permissionError),
 
-    list<ProcessInfo> listProcesses(),
+    list<ProcessInfo> listProcesses()
+        throws (1: PermissionException permissionError),
 
     // Returns new output since last read (streaming poll).
     // ANSI escape codes are preserved as raw bytes.
     ProcessOutput readProcessOutput(
         1: required i64 pid
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     // --- File Operations ---
 
     binary readFile(
         1: required string path
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     void writeFile(
         1: required string path,
         2: required binary data
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     bool deleteFile(
         1: required string path
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     list<FileInfo> listDirectory(
         1: required string path
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     bool fileExists(
         1: required string path
-    ),
+    ) throws (1: PermissionException permissionError),
 
     void createDirectory(
         1: required string path,
         2: required bool recursive
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
-    list<FileInfo> listRoots(),
+    list<FileInfo> listRoots()
+        throws (1: PermissionException permissionError),
 
     // Set POSIX permissions (octal mode, e.g. 0755).
     // On Windows this is a no-op that returns false.
     bool setPermissions(
         1: required string path,
         2: required i32 mode
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     // --- File Transfer (chunked) ---
 
@@ -218,34 +225,34 @@ service RemoteAgentService {
     string beginUpload(
         1: required string path,
         2: required i64 fileSize
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     void uploadChunk(
         1: required string transferId,
         2: required binary data
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     void finishUpload(
         1: required string transferId
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     void cancelUpload(
         1: required string transferId
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     // Download: agent -> host
     DownloadInfo beginDownload(
         1: required string path
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     binary downloadChunk(
         1: required string transferId,
         2: required i32 chunkSize
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     void finishDownload(
         1: required string transferId
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     // --- Environment / System Info ---
 
@@ -257,36 +264,38 @@ service RemoteAgentService {
 
     SystemInfo getSystemInfo(),
 
-    StatInfo getStat() throws (1: AgentException error),
+    StatInfo getStat()
+        throws (1: AgentException error, 2: PermissionException permissionError),
 
-    UserInfo getUserInfo(),
+    UserInfo getUserInfo()
+        throws (1: PermissionException permissionError),
 
     // --- HTTP Client ---
 
     HttpResponse executeHttpRequest(
         1: required HttpRequest request
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     // --- WebSocket Proxy ---
 
     string connectWebSocket(
         1: required string url,
         2: optional map<string, string> headers
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     WebSocketData readWebSocketData(
         1: required string sessionId
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     void sendWebSocketData(
         1: required string sessionId,
         2: optional binary binaryData,
         3: optional string textData
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     void closeWebSocket(
         1: required string sessionId
-    ) throws (1: AgentException error),
+    ) throws (1: AgentException error, 2: PermissionException permissionError),
 
     // --- Utility ---
 

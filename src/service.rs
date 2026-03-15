@@ -53,10 +53,10 @@ impl Permissions {
         if self.all || self.groups.contains(group) {
             Ok(())
         } else {
-            Err(agent_err(format!(
-                "Permission denied: '{}' not in --permissions",
-                group
-            )))
+            Err(thrift::Error::User(Box::new(PermissionException::new(
+                format!("Permission denied: '{}' not in --permissions", group),
+                group.to_string(),
+            ))))
         }
     }
 
