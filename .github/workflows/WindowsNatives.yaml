@@ -38,7 +38,7 @@ jobs:
           BIN="target/${{ matrix.target }}/release/remote-agent.exe"
           case "${{ matrix.name }}" in
             windows-x86_64)  EXPECT="x86-64" ;;
-            windows-aarch64) EXPECT="Aarch64" ;;
+            windows-aarch64) EXPECT="ARM64" ;;
           esac
           INFO=$(file "$BIN")
           echo "$INFO"
