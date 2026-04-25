@@ -1,0 +1,110 @@
+name: Windows Natives
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  loader:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: windows-x86_64,  target: x86_64-pc-windows-msvc  }
+          - { name: windows-aarch64, target: aarch64-pc-windows-msvc }
+
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build release
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Verify PE architecture
+        shell: bash
+        run: |
+          BIN="target/${{ matrix.target }}/release/remote-agent.exe"
+          case "${{ matrix.name }}" in
+            windows-x86_64)  EXPECT="x86-64" ;;
+            windows-aarch64) EXPECT="Aarch64" ;;
+          esac
+          INFO=$(file "$BIN")
+          echo "$INFO"
+          if ! echo "$INFO" | grep -q "$EXPECT"; then
+            echo "::error::PE machine mismatch. Expected '$EXPECT' for ${{ matrix.name }} in: $INFO"
+            exit 1
+          fi
+          echo "OK: PE machine matches '$EXPECT'."
+
+      - name: Run unit tests (host only)
+        if: matrix.name == 'windows-x86_64'
+        run: cargo test --release --target ${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: remote-agent-${{ matrix.name }}
+          path: target/${{ matrix.target }}/release/remote-agent.exe
+          if-no-files-found: error
+
+  publish:
+    needs: [loader]
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: binaries-publish
+      cancel-in-progress: false
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Package archives
+        run: |
+          set -euo pipefail
+          mkdir -p out pkg
+          for dir in artifacts/*/; do
+            name=$(basename "$dir")
+            for plat in windows-x86_64 windows-aarch64; do
+              if [[ "$name" == *"-$plat" ]]; then
+                rm -rf pkg/*
+                cp "$dir"remote-agent.exe pkg/remote-agent.exe
+                mkdir -p "out/$plat"
+                (cd pkg && zip "../out/$plat/remote-agent.zip" remote-agent.exe)
+                break
+              fi
+            done
+          done
+          rm -rf pkg
+          find out -type f
+
+      - name: Commit and push to consulo/binaries
+        env:
+          CONSULO_BOT_TOKEN: ${{ secrets.CONSULO_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone "https://consulo-bot:${CONSULO_BOT_TOKEN}@github.com/consulo/binaries.git" binaries-repo
+          cd binaries-repo
+          git checkout master 2>/dev/null || git checkout --orphan master
+          git config user.name "consulo Bot"
+          git config user.email "consulo.bot@gmail.com"
+          cp -r ../out/. .
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update Windows remote-agent binaries from ${GITHUB_REPOSITORY}@${GITHUB_SHA::7}"
+            git push -u origin master
+          fi

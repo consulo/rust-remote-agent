@@ -1,0 +1,146 @@
+name: Linux Natives
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  loader:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            target: x86_64-unknown-linux-gnu
+          - name: linux-aarch64
+            target: aarch64-unknown-linux-gnu
+            apt: gcc-aarch64-linux-gnu
+            linker_var: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER
+            linker_bin: aarch64-linux-gnu-gcc
+          - name: linux-riscv64
+            target: riscv64gc-unknown-linux-gnu
+            apt: gcc-riscv64-linux-gnu
+            linker_var: CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_LINKER
+            linker_bin: riscv64-linux-gnu-gcc
+          - name: linux-loongarch64
+            target: loongarch64-unknown-linux-gnu
+            loongson: true
+            linker_var: CARGO_TARGET_LOONGARCH64_UNKNOWN_LINUX_GNU_LINKER
+            linker_bin: loongarch64-unknown-linux-gnu-gcc
+
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install apt cross-linker
+        if: matrix.apt
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.apt }}
+
+      - name: Install Loongson toolchain
+        if: matrix.loongson
+        run: |
+          URL="https://github.com/loongson/build-tools/releases/download/2024.08.08/x86_64-cross-tools-loongarch64-binutils_2.43-gcc_14.2.0-glibc_2.40.tar.xz"
+          wget -q "$URL" -O /tmp/loongson.tar.xz
+          sudo mkdir -p /opt/loongson
+          sudo tar -xf /tmp/loongson.tar.xz -C /opt/loongson --strip-components=1
+          echo "/opt/loongson/bin" >> $GITHUB_PATH
+
+      - name: Configure linker env
+        if: matrix.linker_var
+        run: echo "${{ matrix.linker_var }}=${{ matrix.linker_bin }}" >> $GITHUB_ENV
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build release
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Verify ELF architecture
+        run: |
+          BIN="target/${{ matrix.target }}/release/remote-agent"
+          case "${{ matrix.name }}" in
+            linux-x86_64)      EXPECT="Advanced Micro Devices X86-64" ;;
+            linux-aarch64)     EXPECT="AArch64" ;;
+            linux-riscv64)     EXPECT="RISC-V" ;;
+            linux-loongarch64) EXPECT="LoongArch" ;;
+          esac
+          readelf -h "$BIN" | grep -E "Class|Machine"
+          MACHINE=$(readelf -h "$BIN" | awk -F: '/Machine:/ {sub(/^[ \t]+/,"",$2); print $2}')
+          if [ "$MACHINE" != "$EXPECT" ]; then
+            echo "::error::ELF machine mismatch. Expected '$EXPECT' for ${{ matrix.name }}, got '$MACHINE'."
+            exit 1
+          fi
+          echo "OK: ELF machine is '$MACHINE' as expected."
+
+      - name: Run unit tests (host only)
+        if: matrix.name == 'linux-x86_64'
+        run: cargo test --release --target ${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: remote-agent-${{ matrix.name }}
+          path: target/${{ matrix.target }}/release/remote-agent
+          if-no-files-found: error
+
+  publish:
+    needs: [loader]
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: binaries-publish
+      cancel-in-progress: false
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Package archives
+        run: |
+          set -euo pipefail
+          mkdir -p out pkg
+          for dir in artifacts/*/; do
+            name=$(basename "$dir")
+            for plat in linux-x86_64 linux-aarch64 linux-riscv64 linux-loongarch64; do
+              if [[ "$name" == *"-$plat" ]]; then
+                rm -rf pkg/*
+                cp "$dir"remote-agent pkg/remote-agent
+                chmod +x pkg/remote-agent
+                mkdir -p "out/$plat"
+                tar czf "out/$plat/remote-agent.tar.gz" -C pkg remote-agent
+                break
+              fi
+            done
+          done
+          rm -rf pkg
+          find out -type f
+
+      - name: Commit and push to consulo/binaries
+        env:
+          CONSULO_BOT_TOKEN: ${{ secrets.CONSULO_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone "https://consulo-bot:${CONSULO_BOT_TOKEN}@github.com/consulo/binaries.git" binaries-repo
+          cd binaries-repo
+          git checkout master 2>/dev/null || git checkout --orphan master
+          git config user.name "consulo Bot"
+          git config user.email "consulo.bot@gmail.com"
+          cp -r ../out/. .
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update Linux remote-agent binaries from ${GITHUB_REPOSITORY}@${GITHUB_SHA::7}"
+            git push -u origin master
+          fi

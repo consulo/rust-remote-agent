@@ -1,0 +1,110 @@
+name: Mac Natives
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  loader:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macos-x86_64,  target: x86_64-apple-darwin  }
+          - { name: macos-aarch64, target: aarch64-apple-darwin }
+
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build release
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Verify Mach-O architecture
+        run: |
+          BIN="target/${{ matrix.target }}/release/remote-agent"
+          case "${{ matrix.name }}" in
+            macos-x86_64)  EXPECT="x86_64" ;;
+            macos-aarch64) EXPECT="arm64" ;;
+          esac
+          file "$BIN"
+          ARCH=$(lipo -archs "$BIN")
+          if [ "$ARCH" != "$EXPECT" ]; then
+            echo "::error::Mach-O arch mismatch. Expected '$EXPECT' for ${{ matrix.name }}, got '$ARCH'."
+            exit 1
+          fi
+          echo "OK: Mach-O arch is '$ARCH' as expected."
+
+      - name: Run unit tests (host only)
+        if: matrix.name == 'macos-aarch64'
+        run: cargo test --release --target ${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: remote-agent-${{ matrix.name }}
+          path: target/${{ matrix.target }}/release/remote-agent
+          if-no-files-found: error
+
+  publish:
+    needs: [loader]
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: binaries-publish
+      cancel-in-progress: false
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Package archives
+        run: |
+          set -euo pipefail
+          mkdir -p out pkg
+          for dir in artifacts/*/; do
+            name=$(basename "$dir")
+            for plat in macos-x86_64 macos-aarch64; do
+              if [[ "$name" == *"-$plat" ]]; then
+                rm -rf pkg/*
+                cp "$dir"remote-agent pkg/remote-agent
+                chmod +x pkg/remote-agent
+                mkdir -p "out/$plat"
+                tar czf "out/$plat/remote-agent.tar.gz" -C pkg remote-agent
+                break
+              fi
+            done
+          done
+          rm -rf pkg
+          find out -type f
+
+      - name: Commit and push to consulo/binaries
+        env:
+          CONSULO_BOT_TOKEN: ${{ secrets.CONSULO_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone "https://consulo-bot:${CONSULO_BOT_TOKEN}@github.com/consulo/binaries.git" binaries-repo
+          cd binaries-repo
+          git checkout master 2>/dev/null || git checkout --orphan master
+          git config user.name "consulo Bot"
+          git config user.email "consulo.bot@gmail.com"
+          cp -r ../out/. .
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update macOS remote-agent binaries from ${GITHUB_REPOSITORY}@${GITHUB_SHA::7}"
+            git push -u origin master
+          fi

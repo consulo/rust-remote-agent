@@ -4,16 +4,18 @@ A lightweight remote agent for [Consulo IDE](https://consulo.io), providing proc
 
 ## Download
 
-Pre-built binaries are available on the [Releases](https://github.com/consulo/rust-remote-agent/releases/latest) page.
+Pre-built binaries are published to the [consulo/binaries](https://github.com/consulo/binaries) repository under each platform directory as `remote-agent.tar.gz` (or `.zip` on Windows).
 
 | Platform | Architecture | Download |
 |----------|-------------|----------|
-| Linux | x86_64 | [tar.gz](https://github.com/consulo/rust-remote-agent/releases/latest/download/remote-agent-x86_64-unknown-linux-gnu.tar.gz) |
-| Linux | aarch64 | [tar.gz](https://github.com/consulo/rust-remote-agent/releases/latest/download/remote-agent-aarch64-unknown-linux-gnu.tar.gz) |
-| macOS | x86_64 | [tar.gz](https://github.com/consulo/rust-remote-agent/releases/latest/download/remote-agent-x86_64-apple-darwin.tar.gz) |
-| macOS | aarch64 (Apple Silicon) | [tar.gz](https://github.com/consulo/rust-remote-agent/releases/latest/download/remote-agent-aarch64-apple-darwin.tar.gz) |
-| Windows | x86_64 | [zip](https://github.com/consulo/rust-remote-agent/releases/latest/download/remote-agent-x86_64-pc-windows-msvc.zip) |
-| Windows | aarch64 | [zip](https://github.com/consulo/rust-remote-agent/releases/latest/download/remote-agent-aarch64-pc-windows-msvc.zip) |
+| Linux | x86_64 | [tar.gz](https://github.com/consulo/binaries/raw/master/linux-x86_64/remote-agent.tar.gz) |
+| Linux | aarch64 | [tar.gz](https://github.com/consulo/binaries/raw/master/linux-aarch64/remote-agent.tar.gz) |
+| Linux | riscv64 | [tar.gz](https://github.com/consulo/binaries/raw/master/linux-riscv64/remote-agent.tar.gz) |
+| Linux | loongarch64 | [tar.gz](https://github.com/consulo/binaries/raw/master/linux-loongarch64/remote-agent.tar.gz) |
+| macOS | x86_64 | [tar.gz](https://github.com/consulo/binaries/raw/master/macos-x86_64/remote-agent.tar.gz) |
+| macOS | aarch64 (Apple Silicon) | [tar.gz](https://github.com/consulo/binaries/raw/master/macos-aarch64/remote-agent.tar.gz) |
+| Windows | x86_64 | [zip](https://github.com/consulo/binaries/raw/master/windows-x86_64/remote-agent.zip) |
+| Windows | aarch64 | [zip](https://github.com/consulo/binaries/raw/master/windows-aarch64/remote-agent.zip) |
 
 ## Build
 
@@ -62,6 +64,38 @@ remote-agent --permissions fs,http
 
 # Custom port and workspace
 remote-agent --port 9090 --workspace /opt/workspace --permissions fs,process
+```
+
+## Docker / Podman
+
+Build for a specific architecture:
+
+```bash
+# x86_64
+docker build --platform linux/amd64 -t consulo/remote-agent:latest image/
+# or
+podman build --platform linux/amd64 -t consulo/remote-agent:latest image/
+
+# aarch64
+docker build --platform linux/arm64 -t consulo/remote-agent:latest image/
+# or
+podman build --platform linux/arm64 -t consulo/remote-agent:latest image/
+```
+
+Run:
+
+```bash
+docker run -p 57638:57638 consulo/remote-agent:latest
+# or
+podman run -p 57638:57638 consulo/remote-agent:latest
+```
+
+Mount a local workspace:
+
+```bash
+docker run -p 57638:57638 -v /my/workspace:/workspace consulo/remote-agent:latest
+# or
+podman run -p 57638:57638 -v /my/workspace:/workspace consulo/remote-agent:latest
 ```
 
 ## Java Test Client
