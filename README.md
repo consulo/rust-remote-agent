@@ -68,34 +68,59 @@ remote-agent --port 9090 --workspace /opt/workspace --permissions fs,process
 
 ## Docker / Podman
 
-Build for a specific architecture:
+Published as [`consuloide/remote-agent`](https://hub.docker.com/r/consuloide/remote-agent) for `linux/amd64` and `linux/arm64`.
+
+```bash
+docker run --pull=always -p 127.0.0.1:57638:57638 docker.io/consuloide/remote-agent:latest
+# or
+podman run --pull=always -p 127.0.0.1:57638:57638 docker.io/consuloide/remote-agent:latest
+```
+
+Mount a local workspace, and keep the downloaded toolchains between runs:
+
+```bash
+docker run -p 127.0.0.1:57638:57638 \
+  -v /my/workspace:/workspace \
+  -v remote-agent-tools:/opt/tools \
+  docker.io/consuloide/remote-agent:latest
+```
+
+The image ships the agent only - the toolchains are downloaded into `/opt/tools` on first
+start by the entrypoint, and are skipped when already present:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `TOOL_JAVA_VERSION` | Temurin JDK version (always installed) | `25` |
+| `TOOL_NODEJS` / `TOOL_NODEJS_VERSION` | install Node.js / version | `1` / `24.19.0` |
+| `TOOL_GO` / `TOOL_GO_VERSION` | install Go / version | `1` / `1.26.5` |
+| `TOOL_RUST` / `TOOL_RUST_VERSION` | install Rust / toolchain | `1` / `stable` |
+| `TOOL_DOTNET` / `TOOL_DOTNET_VERSION` | install .NET / channel | `1` / `LTS` |
+| `AGENT_HOST` | host passed to the agent | `0.0.0.0` |
+| `AGENT_PORT` | port passed to the agent | `57638` |
+| `AGENT_PERMISSIONS` | permission groups passed to the agent | `*` |
+| `WORKSPACE_DIR` | workspace passed to the agent | `/workspace` |
+
+Set `TOOL_<NAME>=0` to skip a toolchain, e.g. `-e TOOL_DOTNET=0 -e TOOL_GO=0`. Arguments
+given after the image name are passed to the agent, and a flag given there replaces the
+matching environment default:
+
+```bash
+docker run -p 127.0.0.1:9090:9090 docker.io/consuloide/remote-agent:latest --port 9090
+```
+
+Build locally for a specific architecture - the image pulls the binary published to
+[consulo/binaries](https://github.com/consulo/binaries):
 
 ```bash
 # x86_64
-docker build --platform linux/amd64 -t consulo/remote-agent:latest image/
+docker build --platform linux/amd64 -t consuloide/remote-agent:latest docker/
 # or
-podman build --platform linux/amd64 -t consulo/remote-agent:latest image/
+podman build --platform linux/amd64 -t consuloide/remote-agent:latest docker/
 
 # aarch64
-docker build --platform linux/arm64 -t consulo/remote-agent:latest image/
+docker build --platform linux/arm64 -t consuloide/remote-agent:latest docker/
 # or
-podman build --platform linux/arm64 -t consulo/remote-agent:latest image/
-```
-
-Run:
-
-```bash
-docker run -p 57638:57638 consulo/remote-agent:latest
-# or
-podman run -p 57638:57638 consulo/remote-agent:latest
-```
-
-Mount a local workspace:
-
-```bash
-docker run -p 57638:57638 -v /my/workspace:/workspace consulo/remote-agent:latest
-# or
-podman run -p 57638:57638 -v /my/workspace:/workspace consulo/remote-agent:latest
+podman build --platform linux/arm64 -t consuloide/remote-agent:latest docker/
 ```
 
 ## Java Test Client
