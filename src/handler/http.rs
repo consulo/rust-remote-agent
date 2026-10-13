@@ -12,23 +12,49 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use crate::generated::remote_agent::{AgentException, HttpRequest, HttpResponse};
+use std::collections::HashMap;
+use std::time::Duration;
 
-fn agent_err(msg: String) -> thrift::Error {
-    thrift::Error::User(Box::new(AgentException::new(msg)))
+use ureq::ResponseExt;
+
+use crate::error::{AgentError, AgentResult, agent_err};
+use crate::proto::{HttpRequest, HttpResponse};
+
+fn millis(value: Option<i32>) -> Option<Duration> {
+    value
+        .filter(|v| *v > 0)
+        .map(|v| Duration::from_millis(v as u64))
 }
 
-fn read_response(response: ureq::http::Response<ureq::Body>) -> thrift::Result<HttpResponse> {
-    let status_code = response.status().as_u16() as i32;
+fn create_agent(request: &HttpRequest) -> ureq::Agent {
+    let read_timeout = millis(request.read_timeout_millis);
+    let mut config = ureq::Agent::config_builder()
+        .http_status_as_error(false)
+        .timeout_connect(millis(request.connect_timeout_millis))
+        .timeout_recv_response(read_timeout)
+        .timeout_recv_body(read_timeout);
+    if let Some(max_redirects) = request.max_redirects {
+        config = config
+            .max_redirects(max_redirects.max(0) as u32)
+            .max_redirects_will_error(false);
+    }
+    config.build().into()
+}
 
-    let mut response_headers: BTreeMap<String, String> = BTreeMap::new();
+fn read_response(response: ureq::http::Response<ureq::Body>) -> AgentResult<HttpResponse> {
+    let status_code = response.status().as_u16() as i32;
+    let url = response.get_uri().to_string();
+
+    let mut response_headers: HashMap<String, String> = HashMap::new();
     let headers = response.headers();
     for key in headers.keys() {
-        if let Some(value) = headers.get(key) {
-            if let Ok(v) = value.to_str() {
-                response_headers.insert(key.as_str().to_string(), v.to_string());
-            }
+        let values: Vec<&str> = headers
+            .get_all(key)
+            .iter()
+            .filter_map(|v| v.to_str().ok())
+            .collect();
+        if !values.is_empty() {
+            response_headers.insert(key.as_str().to_string(), values.join(", "));
         }
     }
 
@@ -37,69 +63,36 @@ fn read_response(response: ureq::http::Response<ureq::Body>) -> thrift::Result<H
         .read_to_vec()
         .map_err(|e| agent_err(format!("Failed to read HTTP response body: {}", e)))?;
 
-    Ok(HttpResponse::new(
+    Ok(HttpResponse {
         status_code,
         body,
-        if response_headers.is_empty() {
-            None
-        } else {
-            Some(response_headers)
-        },
-    ))
+        headers: response_headers,
+        url,
+    })
 }
 
-fn handle_error(err: ureq::Error) -> thrift::Result<HttpResponse> {
-    match err {
-        ureq::Error::StatusCode(code) => Ok(HttpResponse::new(code as i32, Vec::new(), None)),
-        e => Err(agent_err(format!("HTTP request failed: {}", e))),
-    }
-}
+pub fn execute_http_request(request: HttpRequest) -> AgentResult<HttpResponse> {
+    let method = ureq::http::Method::from_bytes(request.method.to_uppercase().as_bytes())
+        .map_err(|e| AgentError::InvalidArgument(format!("Unsupported HTTP method '{}': {}", request.method, e)))?;
 
-pub fn execute_http_request(request: HttpRequest) -> thrift::Result<HttpResponse> {
-    let method = request.method.to_uppercase();
-    let agent = ureq::Agent::new_with_defaults();
+    let agent = create_agent(&request);
 
-    match method.as_str() {
-        "GET" => {
-            let mut req = agent.get(&request.url);
-            if let Some(headers) = &request.headers {
-                for (key, value) in headers {
-                    req = req.header(key.as_str(), value.as_str());
-                }
-            }
-            match req.call() {
-                Ok(resp) => read_response(resp),
-                Err(e) => handle_error(e),
-            }
-        }
-        "DELETE" => {
-            let mut req = agent.delete(&request.url);
-            if let Some(headers) = &request.headers {
-                for (key, value) in headers {
-                    req = req.header(key.as_str(), value.as_str());
-                }
-            }
-            match req.call() {
-                Ok(resp) => read_response(resp),
-                Err(e) => handle_error(e),
-            }
-        }
-        "POST" => {
-            let mut req = agent.post(&request.url);
-            if let Some(headers) = &request.headers {
-                for (key, value) in headers {
-                    req = req.header(key.as_str(), value.as_str());
-                }
-            }
-            let body_bytes = request.body.as_deref().unwrap_or(&[]);
-            match req.send(body_bytes) {
-                Ok(resp) => read_response(resp),
-                Err(e) => handle_error(e),
-            }
-        }
-        _ => Err(agent_err(format!(
-            "Unsupported HTTP method: {}",
-            request.method
-        ))),
+    let mut builder = ureq::http::Request::builder().method(method).uri(&request.url);
+    for (key, value) in &request.headers {
+        builder = builder.header(key.as_str(), value.as_str());
     }
+
+    let result = match request.body {
+        Some(body) => builder
+            .body(body)
+            .map_err(|e| AgentError::InvalidArgument(format!("Invalid HTTP request: {}", e)))
+            .map(|http_request| agent.run(http_request))?,
+        None => builder
+            .body(())
+            .map_err(|e| AgentError::InvalidArgument(format!("Invalid HTTP request: {}", e)))
+            .map(|http_request| agent.run(http_request))?,
+    };
+
+    let response = result.map_err(|e| agent_err(format!("HTTP request failed: {}", e)))?;
+    read_response(response)
 }

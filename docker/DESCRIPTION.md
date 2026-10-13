@@ -2,8 +2,8 @@
 
 **A lightweight remote agent for [Consulo IDE](https://consulo.io).** It exposes process
 management, file operations, HTTP/WebSocket proxying and system info over
-[Apache Thrift](https://thrift.apache.org), so a Consulo instance running elsewhere can use this
-container as its execution environment.
+[gRPC](https://grpc.io), so a Consulo instance running elsewhere can use this container as its
+execution environment.
 
 The agent is written in Rust and developed in the open at
 [github.com/consulo/rust-remote-agent](https://github.com/consulo/rust-remote-agent), under the

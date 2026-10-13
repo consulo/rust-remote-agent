@@ -16,21 +16,47 @@ use std::fs;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
-use crate::generated::remote_agent::{AgentException, FileInfo};
+use crate::error::{AgentResult, agent_err, io_err};
+use crate::proto::FileInfo;
 
-fn agent_err(msg: String) -> thrift::Error {
-    thrift::Error::User(Box::new(AgentException::new(msg)))
+#[allow(clippy::too_many_arguments)]
+fn file_info(
+    name: String,
+    path: String,
+    size: i64,
+    last_modified: Option<i64>,
+    directory: bool,
+    symlink: bool,
+    hidden: bool,
+    readable: bool,
+    writable: bool,
+    executable: bool,
+    user_name: Option<String>,
+) -> FileInfo {
+    FileInfo {
+        name,
+        path,
+        size,
+        last_modified,
+        directory,
+        symlink,
+        hidden,
+        readable,
+        writable,
+        executable,
+        user_name,
+    }
 }
 
-pub fn read_file(path: &str) -> thrift::Result<Vec<u8>> {
-    fs::read(path).map_err(|e| agent_err(format!("Failed to read '{}': {}", path, e)))
+pub fn read_file(path: &str) -> AgentResult<Vec<u8>> {
+    fs::read(path).map_err(|e| io_err(format!("Failed to read '{}'", path), e))
 }
 
-pub fn write_file(path: &str, data: &[u8]) -> thrift::Result<()> {
-    fs::write(path, data).map_err(|e| agent_err(format!("Failed to write '{}': {}", path, e)))
+pub fn write_file(path: &str, data: &[u8]) -> AgentResult<()> {
+    fs::write(path, data).map_err(|e| io_err(format!("Failed to write '{}'", path), e))
 }
 
-pub fn delete_file(path: &str) -> thrift::Result<bool> {
+pub fn delete_file(path: &str) -> AgentResult<bool> {
     let p = Path::new(path);
     if !p.exists() {
         return Ok(false);
@@ -41,24 +67,31 @@ pub fn delete_file(path: &str) -> thrift::Result<bool> {
         fs::remove_file(p)
     }
     .map(|()| true)
-    .map_err(|e| agent_err(format!("Failed to delete '{}': {}", path, e)))
+    .map_err(|e| io_err(format!("Failed to delete '{}'", path), e))
 }
 
-pub fn list_directory(path: &str) -> thrift::Result<Vec<FileInfo>> {
+pub fn list_directory(path: &str) -> AgentResult<Vec<FileInfo>> {
     let entries =
-        fs::read_dir(path).map_err(|e| agent_err(format!("Failed to list '{}': {}", path, e)))?;
+        fs::read_dir(path).map_err(|e| io_err(format!("Failed to list '{}'", path), e))?;
 
     let mut result = Vec::new();
     for entry in entries {
         let entry =
-            entry.map_err(|e| agent_err(format!("Error reading entry in '{}': {}", path, e)))?;
-        let metadata = entry.metadata().map_err(|e| {
+            entry.map_err(|e| io_err(format!("Error reading entry in '{}'", path), e))?;
+        let link_metadata = entry.metadata().map_err(|e| {
             agent_err(format!(
                 "Failed to get metadata for '{}': {}",
                 entry.path().display(),
                 e
             ))
         })?;
+        let is_symlink = link_metadata.is_symlink();
+        // describe the link target; a broken link falls back to the link itself
+        let metadata = if is_symlink {
+            fs::metadata(entry.path()).unwrap_or(link_metadata)
+        } else {
+            link_metadata
+        };
 
         let last_modified = metadata
             .modified()
@@ -71,13 +104,13 @@ pub fn list_directory(path: &str) -> thrift::Result<Vec<FileInfo>> {
         let (readable, writable, executable) = permissions(&metadata);
         let user_name = get_owner(&entry_path);
 
-        result.push(FileInfo::new(
+        result.push(file_info(
             entry.file_name().to_string_lossy().into_owned(),
             entry_path.to_string_lossy().into_owned(),
             metadata.len() as i64,
             last_modified,
             metadata.is_dir(),
-            metadata.is_symlink(),
+            is_symlink,
             is_hidden,
             readable,
             writable,
@@ -107,7 +140,7 @@ pub fn list_roots() -> Vec<FileInfo> {
                     .as_ref()
                     .map(|m| permissions(m))
                     .unwrap_or((true, true, true));
-                roots.push(FileInfo::new(
+                roots.push(file_info(
                     drive.clone(),
                     drive,
                     0i64,
@@ -132,7 +165,7 @@ pub fn list_roots() -> Vec<FileInfo> {
             .as_ref()
             .map(|m| permissions(m))
             .unwrap_or((true, true, true));
-        vec![FileInfo::new(
+        vec![file_info(
             "/".to_string(),
             "/".to_string(),
             0i64,
@@ -148,23 +181,23 @@ pub fn list_roots() -> Vec<FileInfo> {
     }
 }
 
-pub fn create_directory(path: &str, recursive: bool) -> thrift::Result<()> {
+pub fn create_directory(path: &str, recursive: bool) -> AgentResult<()> {
     let result = if recursive {
         fs::create_dir_all(path)
     } else {
         fs::create_dir(path)
     };
-    result.map_err(|e| agent_err(format!("Failed to create directory '{}': {}", path, e)))
+    result.map_err(|e| io_err(format!("Failed to create directory '{}'", path), e))
 }
 
-pub fn set_permissions(path: &str, mode: i32) -> thrift::Result<bool> {
+pub fn set_permissions(path: &str, mode: i32) -> AgentResult<bool> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         let perms = fs::Permissions::from_mode(mode as u32);
         fs::set_permissions(path, perms)
             .map(|()| true)
-            .map_err(|e| agent_err(format!("Failed to set permissions on '{}': {}", path, e)))
+            .map_err(|e| io_err(format!("Failed to set permissions on '{}'", path), e))
     }
     #[cfg(not(unix))]
     {

@@ -15,10 +15,10 @@
 use std::collections::BTreeMap;
 use std::env;
 
-use crate::generated::remote_agent::{StatInfo, SystemInfo, UserInfo};
+use crate::proto::{StatInfo, SystemInfo, UserInfo};
 
-pub fn get_env_variable(name: &str) -> String {
-    env::var(name).unwrap_or_default()
+pub fn get_env_variable(name: &str) -> Option<String> {
+    env::var(name).ok()
 }
 
 pub fn get_env_variables() -> BTreeMap<String, String> {
@@ -26,24 +26,24 @@ pub fn get_env_variables() -> BTreeMap<String, String> {
 }
 
 pub fn get_system_info() -> SystemInfo {
-    SystemInfo::new(
-        os_name(),
-        os_version(),
-        env::consts::ARCH.to_string(),
-        hostname(),
-        console_encoding(),
-        system_locale(),
-    )
+    SystemInfo {
+        os_name: os_name(),
+        os_version: os_version(),
+        arch: env::consts::ARCH.to_string(),
+        hostname: hostname(),
+        console_encoding: console_encoding(),
+        locale: system_locale(),
+    }
 }
 
 pub fn get_stat() -> StatInfo {
     let (total, used) = memory_stats();
-    StatInfo::new(
-        num_cpus(),
-        thrift::OrderedFloat(cpu_load()),
-        total,
-        used,
-    )
+    StatInfo {
+        cpu_count: num_cpus(),
+        cpu_load: cpu_load(),
+        total_memory: total,
+        used_memory: used,
+    }
 }
 
 pub fn get_user_info() -> UserInfo {
@@ -51,7 +51,7 @@ pub fn get_user_info() -> UserInfo {
         #[cfg(windows)]
         { env::var("USERNAME").unwrap_or_else(|_| "unknown".into()) }
         #[cfg(not(windows))]
-        { env::var("USER").unwrap_or_else(|_| "unknown".into()) }
+        { env::var("USER").ok().or_else(user_name_by_uid).unwrap_or_else(|| "unknown".into()) }
     };
 
     let home_path = {
@@ -61,7 +61,27 @@ pub fn get_user_info() -> UserInfo {
         { env::var("HOME").unwrap_or_else(|_| "unknown".into()) }
     };
 
-    UserInfo::new(user_name, home_path)
+    UserInfo {
+        user_name,
+        home_path,
+    }
+}
+
+#[cfg(unix)]
+fn user_name_by_uid() -> Option<String> {
+    // SAFETY: getpwuid returns a pointer into static storage or null; the name is copied before return
+    unsafe {
+        let passwd = libc::getpwuid(libc::geteuid());
+        if passwd.is_null() || (*passwd).pw_name.is_null() {
+            return None;
+        }
+        std::ffi::CStr::from_ptr((*passwd).pw_name).to_str().ok().map(|s| s.to_string())
+    }
+}
+
+#[cfg(all(not(unix), not(windows)))]
+fn user_name_by_uid() -> Option<String> {
+    None
 }
 
 fn hostname() -> String {

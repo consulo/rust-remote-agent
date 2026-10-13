@@ -12,18 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod generated;
+mod error;
 mod handler;
 mod platform;
+mod security;
 mod service;
 
-use clap::Parser;
-use thrift::protocol::{TBinaryInputProtocolFactory, TBinaryOutputProtocolFactory};
-use thrift::server::TServer;
-use thrift::transport::{TBufferedReadTransportFactory, TBufferedWriteTransportFactory};
+pub mod proto {
+    tonic::include_proto!("remote_agent");
+}
 
-use crate::generated::remote_agent::RemoteAgentServiceSyncProcessor;
-use crate::service::AgentServiceHandler;
+use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
+
+use clap::Parser;
+use tonic::service::interceptor::InterceptedService;
+use tonic::transport::{Identity, Server, ServerTlsConfig};
+
+use crate::proto::remote_agent_service_server::RemoteAgentServiceServer;
+use crate::security::TokenCheck;
+use crate::service::AgentService;
+
+const MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024;
 
 const DEFAULT_PORT: u16 = 57638;
 
@@ -63,9 +73,25 @@ struct Cli {
     #[arg(long, default_value_t = default_workspace())]
     workspace: String,
 
-    /// Comma-separated permission groups: fs,transfer,process,http,websocket,userinfo or * for all
+    /// Comma-separated permission groups: fs,process,http,websocket,userinfo,stat or * for all
     #[arg(long, default_value = "*")]
     permissions: String,
+
+    /// Serve over TLS; without --tls-cert/--tls-key a self-signed certificate is created in the workspace
+    #[arg(long, env = "AGENT_TLS")]
+    tls: bool,
+
+    /// PEM certificate (chain) for TLS
+    #[arg(long, env = "AGENT_TLS_CERT", requires = "tls_key")]
+    tls_cert: Option<PathBuf>,
+
+    /// PEM private key for TLS
+    #[arg(long, env = "AGENT_TLS_KEY", requires = "tls_cert")]
+    tls_key: Option<PathBuf>,
+
+    /// Token clients must send as "authorization: Bearer <token>"
+    #[arg(long, env = "AGENT_TOKEN", hide_env_values = true)]
+    token: Option<String>,
 }
 
 /// Detect the local LAN IP by opening a UDP socket to a public address.
@@ -78,11 +104,40 @@ fn detect_local_ip() -> Option<String> {
     Some(addr.ip().to_string())
 }
 
-fn main() {
+fn describe_bind_error(error: &std::io::Error, addr: SocketAddr) -> String {
+    let port = addr.port();
+    match error.kind() {
+        std::io::ErrorKind::AddrInUse => format!(
+            "Cannot listen on {addr}: port {port} is already used by another program \
+             (maybe another remote-agent or a container publishing it).\n\
+             Stop that program or choose another port with --port <PORT>. \
+             To see who holds it: ss -ltnp 'sport = :{port}'"
+        ),
+        std::io::ErrorKind::PermissionDenied => format!(
+            "Cannot listen on {addr}: permission denied. Ports below 1024 need root; use --port with a higher port."
+        ),
+        std::io::ErrorKind::AddrNotAvailable => format!(
+            "Cannot listen on {addr}: the address {} does not belong to this machine. \
+             Use --host 0.0.0.0 to listen on all interfaces.",
+            addr.ip()
+        ),
+        _ => format!("Cannot listen on {addr}: {error}"),
+    }
+}
+
+#[tokio::main]
+async fn main() {
     env_logger::init();
     let cli = Cli::parse();
 
     let listen_addr = format!("{}:{}", cli.host, cli.port);
+    let socket_addr: SocketAddr = match listen_addr.parse() {
+        Ok(addr) => addr,
+        Err(e) => {
+            eprintln!("Invalid listen address '{}': {}", listen_addr, e);
+            std::process::exit(1);
+        }
+    };
     let workspace = cli.workspace;
     let permissions = service::Permissions::parse(&cli.permissions);
 
@@ -94,40 +149,101 @@ fn main() {
 
     let local_ip = detect_local_ip().unwrap_or_else(|| "unknown".to_string());
 
-    log::info!("Starting remote-agent on {} (platform: {}, workspace: {})", listen_addr, platform::platform_label(), workspace);
-    println!("rust-remote-agent v{}", env!("CARGO_PKG_VERSION"));
-    println!("platform: {}", platform::platform_label());
-    println!("listening on {}", listen_addr);
-    println!("connect via: {}:{}", local_ip, cli.port);
-    println!("workspace: {}", workspace);
-    println!("permissions: {}", permissions.display());
+    let tls = if cli.tls || cli.tls_cert.is_some() {
+        let mut names = vec!["localhost".to_string(), "127.0.0.1".to_string(), handler::env::get_system_info().hostname];
+        if local_ip != "unknown" {
+            names.push(local_ip.clone());
+        }
+        let state_dir = Path::new(&workspace).join(".remote-agent");
+        match security::load_tls(cli.tls_cert.as_deref(), cli.tls_key.as_deref(), &state_dir, names) {
+            Ok(material) => Some(material),
+            Err(e) => {
+                eprintln!("{}", e);
+                std::process::exit(1);
+            }
+        }
+    } else {
+        None
+    };
+    let token = cli.token.filter(|t| !t.is_empty());
 
-    // Flush stdout before server.listen() blocks
-    use std::io::Write;
-    let _ = std::io::stdout().flush();
-
-    let handler = AgentServiceHandler::new(workspace, permissions);
-    let processor = RemoteAgentServiceSyncProcessor::new(handler);
-
-    let input_transport_factory = TBufferedReadTransportFactory::new();
-    let input_protocol_factory = TBinaryInputProtocolFactory::new();
-    let output_transport_factory = TBufferedWriteTransportFactory::new();
-    let output_protocol_factory = TBinaryOutputProtocolFactory::new();
-
-    let mut server = TServer::new(
-        input_transport_factory,
-        input_protocol_factory,
-        output_transport_factory,
-        output_protocol_factory,
-        processor,
-        10,
-    );
-
-    match server.listen(&listen_addr) {
-        Ok(()) => {}
+    let listener = match tokio::net::TcpListener::bind(socket_addr).await {
+        Ok(listener) => listener,
         Err(e) => {
-            eprintln!("Server error: {}", e);
+            eprintln!("{}", describe_bind_error(&e, socket_addr));
             std::process::exit(1);
         }
+    };
+
+    log::info!("Starting remote-agent on {} (platform: {}, workspace: {})", listen_addr, platform::platform_label(), workspace);
+    println!("Consulo Remote Agent v{}", env!("CARGO_PKG_VERSION"));
+    println!("platform: {}", platform::platform_label());
+    println!("workspace: {}", workspace);
+    println!("permissions: {}", permissions.display());
+    match &tls {
+        Some(material) => {
+            println!("tls: on, certificate SHA-256 {}", material.fingerprint);
+            if let Some(dir) = &material.generated_at {
+                println!("tls: self-signed certificate in {}", dir.display());
+            }
+        }
+        None => println!("tls: off"),
     }
+    println!("token: {}", if token.is_some() { "required" } else { "not required" });
+    if token.is_none() {
+        println!("warning: no --token, anyone who can reach the port can use this agent");
+    }
+
+
+    let service = RemoteAgentServiceServer::new(AgentService::new(workspace, permissions))
+        .max_decoding_message_size(MAX_MESSAGE_SIZE)
+        .max_encoding_message_size(MAX_MESSAGE_SIZE);
+    let service = InterceptedService::new(service, TokenCheck::new(token));
+
+    let mut builder = Server::builder();
+    if let Some(material) = tls {
+        let config = ServerTlsConfig::new().identity(Identity::from_pem(material.cert_pem, material.key_pem));
+        builder = match builder.tls_config(config) {
+            Ok(builder) => builder,
+            Err(e) => {
+                eprintln!("Invalid TLS configuration: {}", e);
+                std::process::exit(1);
+            }
+        };
+    }
+
+    let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
+    println!("listening on {}, connect via {}:{}", listen_addr, local_ip, cli.port);
+    {
+        use std::io::Write;
+        let _ = std::io::stdout().flush();
+    }
+    let result = builder.add_service(service).serve_with_incoming_shutdown(incoming, shutdown_signal()).await;
+    if let Err(e) = result {
+        eprintln!("Server error: {}", e);
+        std::process::exit(1);
+    }
+}
+
+#[cfg(unix)]
+async fn shutdown_signal() {
+    use tokio::signal::unix::{SignalKind, signal};
+    match signal(SignalKind::terminate()) {
+        Ok(mut terminate) => {
+            tokio::select! {
+                _ = terminate.recv() => {}
+                _ = tokio::signal::ctrl_c() => {}
+            }
+        }
+        Err(_) => {
+            let _ = tokio::signal::ctrl_c().await;
+        }
+    }
+    log::info!("Shutting down");
+}
+
+#[cfg(not(unix))]
+async fn shutdown_signal() {
+    let _ = tokio::signal::ctrl_c().await;
+    log::info!("Shutting down");
 }

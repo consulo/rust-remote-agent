@@ -1,6 +1,6 @@
 # rust-remote-agent
 
-A lightweight remote agent for [Consulo IDE](https://consulo.io), providing process management, file operations, and system info over Apache Thrift.
+A lightweight remote agent for [Consulo IDE](https://consulo.io), providing process management, file operations, HTTP/WebSocket proxying and system info over [gRPC](https://grpc.io).
 
 ## Download
 
@@ -44,14 +44,16 @@ remote-agent [OPTIONS]
 
 | Group | Methods |
 |-------|---------|
-| `fs` | readFile, writeFile, deleteFile, listDirectory, fileExists, createDirectory, listRoots, setPermissions, beginUpload, uploadChunk, finishUpload, cancelUpload, beginDownload, downloadChunk, finishDownload |
-| `process` | startProcess, killProcess, isProcessAlive, listProcesses, readProcessOutput |
-| `http` | executeHttpRequest |
-| `websocket` | connectWebSocket, readWebSocketData, sendWebSocketData, closeWebSocket |
-| `userinfo` | getUserInfo |
-| `stat` | getStat |
+| `fs` | ReadFile, WriteFile, ReadFileStream, WriteFileStream, DeleteFile, ListDirectory, FileExists, CreateDirectory, ListRoots, SetPermissions |
+| `process` | Exec, KillProcess, ListProcesses |
+| `http` | ExecuteHttpRequest |
+| `websocket` | WebSocket |
+| `userinfo` | GetUserInfo |
+| `stat` | GetStat |
 
-Methods that are always accessible (no permission needed): `getAgentInfo`, `getWorkspacePath`, `getSystemInfo`, `getEnvVariable`, `getEnvVariables`, `findFreePort`.
+Methods that are always accessible (no permission needed): `GetAgentInfo`, `GetWorkspacePath`, `GetSystemInfo`, `GetEnvVariable`, `GetEnvVariables`, `FindFreePort`.
+
+A call without the permission fails with `PERMISSION_DENIED`; the denied group is in the `permission` trailer.
 
 ### Examples
 
@@ -123,12 +125,25 @@ docker build --platform linux/arm64 -t consuloide/remote-agent:latest docker/
 podman build --platform linux/arm64 -t consuloide/remote-agent:latest docker/
 ```
 
+## Protocol
+
+The service is defined in [`proto/remote_agent.proto`](proto/remote_agent.proto). Long-lived
+interactions are streams: `Exec` (process output, stdin, kill), `WebSocket`, `ReadFileStream` and
+`WriteFileStream`. Errors are gRPC statuses (`NOT_FOUND`, `ALREADY_EXISTS`, `PERMISSION_DENIED`,
+`INVALID_ARGUMENT`, `UNKNOWN`). The connection is plaintext HTTP/2 - bind to `127.0.0.1` or
+tunnel it (SSH, `docker exec`) on untrusted networks.
+
+`protoc` comes from the `protoc-bin-vendored` crate, so building needs only `cargo`.
+
 ## Java Test Client
 
-Generate Java sources without `javax.annotation` annotations:
+[`java-test`](java-test) generates its gRPC stubs from the same proto and checks every call
+against a running agent (exit code 1 on the first failure):
 
 ```bash
-thrift --gen java:generated_annotations=suppress -out java-test/src/main/java thrift/remote_agent.thrift
+cd java-test
+mvn package dependency:build-classpath -Dmdep.outputFile=target/classpath.txt
+java -cp "target/classes:$(cat target/classpath.txt)" consulo.platform.remote.agent.test.TestClient 127.0.0.1 57638
 ```
 
 ## License

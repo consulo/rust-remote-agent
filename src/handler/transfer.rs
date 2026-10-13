@@ -12,165 +12,109 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
-use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::generated::remote_agent::{AgentException, DownloadInfo};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::mpsc;
+use tonic::{Status, Streaming};
 
-fn agent_err(msg: String) -> thrift::Error {
-    thrift::Error::User(Box::new(AgentException::new(msg)))
+use crate::error::{AgentError, AgentResult, io_err};
+use crate::proto::write_stream_input::Input;
+use crate::proto::{FileContent, WriteStreamInput};
+
+const DEFAULT_CHUNK: usize = 256 * 1024;
+const MAX_CHUNK: usize = 4 * 1024 * 1024;
+
+pub type ChunkSender = mpsc::Sender<Result<FileContent, Status>>;
+
+pub async fn open_for_read(path: &str) -> AgentResult<tokio::fs::File> {
+    tokio::fs::File::open(path)
+        .await
+        .map_err(|e| io_err(format!("Failed to read '{}'", path), e))
 }
 
-struct Upload {
-    file: File,
-    path: String,
-    tmp_path: String,
-}
-
-struct Download {
-    file: File,
-    remaining: i64,
-}
-
-pub struct TransferManager {
-    uploads: Mutex<BTreeMap<String, Upload>>,
-    downloads: Mutex<BTreeMap<String, Download>>,
-    counter: Mutex<u64>,
-}
-
-impl TransferManager {
-    pub fn new() -> Self {
-        TransferManager {
-            uploads: Mutex::new(BTreeMap::new()),
-            downloads: Mutex::new(BTreeMap::new()),
-            counter: Mutex::new(0),
+pub async fn read_stream(mut file: tokio::fs::File, path: String, chunk_size: i32, chunks: ChunkSender) {
+    let size = if chunk_size > 0 {
+        (chunk_size as usize).min(MAX_CHUNK)
+    } else {
+        DEFAULT_CHUNK
+    };
+    let mut buffer = vec![0u8; size];
+    loop {
+        match file.read(&mut buffer).await {
+            Ok(0) => return,
+            Ok(n) => {
+                let chunk = FileContent {
+                    data: buffer[..n].to_vec(),
+                };
+                if chunks.send(Ok(chunk)).await.is_err() {
+                    return;
+                }
+            }
+            Err(e) => {
+                let status: Status = io_err(format!("Failed to read '{}'", path), e).into();
+                let _ = chunks.send(Err(status)).await;
+                return;
+            }
         }
     }
+}
 
-    fn next_id(&self, prefix: &str) -> String {
-        let mut counter = self.counter.lock().unwrap();
-        *counter += 1;
-        format!("{}-{}", prefix, *counter)
-    }
-
-    // --- Upload: host -> agent ---
-
-    pub fn begin_upload(&self, path: String, _file_size: i64) -> thrift::Result<String> {
-        let tmp_path = format!("{}.tmp", &path);
-
-        let file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&tmp_path)
-            .map_err(|e| agent_err(format!("Failed to create '{}': {}", tmp_path, e)))?;
-
-        let id = self.next_id("up");
-        self.uploads.lock().unwrap().insert(
-            id.clone(),
-            Upload {
-                file,
-                path,
-                tmp_path,
-            },
-        );
-
-        log::info!("Begin upload id={}", id);
-        Ok(id)
-    }
-
-    pub fn upload_chunk(&self, transfer_id: &str, data: &[u8]) -> thrift::Result<()> {
-        let mut uploads = self.uploads.lock().unwrap();
-        let upload = uploads
-            .get_mut(transfer_id)
-            .ok_or_else(|| agent_err(format!("Unknown upload: {}", transfer_id)))?;
-
-        upload
-            .file
-            .write_all(data)
-            .map_err(|e| agent_err(format!("Write failed for upload {}: {}", transfer_id, e)))
-    }
-
-    pub fn finish_upload(&self, transfer_id: &str) -> thrift::Result<()> {
-        let mut uploads = self.uploads.lock().unwrap();
-        let upload = uploads
-            .remove(transfer_id)
-            .ok_or_else(|| agent_err(format!("Unknown upload: {}", transfer_id)))?;
-
-        drop(upload.file);
-
-        fs::rename(&upload.tmp_path, &upload.path).map_err(|e| {
-            agent_err(format!(
-                "Failed to rename '{}' -> '{}': {}",
-                upload.tmp_path, upload.path, e
-            ))
-        })?;
-
-        log::info!("Finished upload id={} path={}", transfer_id, upload.path);
-        Ok(())
-    }
-
-    pub fn cancel_upload(&self, transfer_id: &str) -> thrift::Result<()> {
-        let mut uploads = self.uploads.lock().unwrap();
-        if let Some(upload) = uploads.remove(transfer_id) {
-            drop(upload.file);
-            let _ = fs::remove_file(&upload.tmp_path);
-            log::info!("Cancelled upload id={}", transfer_id);
+pub async fn write_stream(mut input: Streaming<WriteStreamInput>) -> AgentResult<()> {
+    let path = match input.message().await {
+        Ok(Some(WriteStreamInput {
+            input: Some(Input::Path(path)),
+        })) => path,
+        Ok(_) => {
+            return Err(AgentError::InvalidArgument(
+                "The first message of a write stream must be the path".to_string(),
+            ));
         }
-        Ok(())
+        Err(status) => return Err(AgentError::Failed(status.message().to_string())),
+    };
+
+    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let tmp_path = format!("{}.consulo-upload-{}", path, nanos);
+    let mut file = tokio::fs::File::create(&tmp_path)
+        .await
+        .map_err(|e| io_err(format!("Failed to write '{}'", path), e))?;
+
+    let result = copy_chunks(&mut input, &mut file, &path).await;
+    drop(file);
+    match result {
+        Ok(()) => tokio::fs::rename(&tmp_path, &path)
+            .await
+            .map_err(|e| io_err(format!("Failed to write '{}'", path), e)),
+        Err(e) => {
+            let _ = tokio::fs::remove_file(&tmp_path).await;
+            Err(e)
+        }
     }
+}
 
-    // --- Download: agent -> host ---
-
-    pub fn begin_download(&self, path: &str) -> thrift::Result<DownloadInfo> {
-        let metadata = fs::metadata(path)
-            .map_err(|e| agent_err(format!("Failed to stat '{}': {}", path, e)))?;
-
-        let file_size = metadata.len() as i64;
-
-        let file = File::open(path)
-            .map_err(|e| agent_err(format!("Failed to open '{}': {}", path, e)))?;
-
-        let id = self.next_id("dl");
-        self.downloads.lock().unwrap().insert(
-            id.clone(),
-            Download {
-                file,
-                remaining: file_size,
-            },
-        );
-
-        log::info!("Begin download id={} path={} size={}", id, path, file_size);
-        Ok(DownloadInfo::new(id, file_size))
-    }
-
-    pub fn download_chunk(
-        &self,
-        transfer_id: &str,
-        chunk_size: i32,
-    ) -> thrift::Result<Vec<u8>> {
-        let mut downloads = self.downloads.lock().unwrap();
-        let download = downloads
-            .get_mut(transfer_id)
-            .ok_or_else(|| agent_err(format!("Unknown download: {}", transfer_id)))?;
-
-        let to_read = (chunk_size as i64).min(download.remaining) as usize;
-        let mut buf = vec![0u8; to_read];
-        let n = download
-            .file
-            .read(&mut buf)
-            .map_err(|e| agent_err(format!("Read failed for download {}: {}", transfer_id, e)))?;
-
-        buf.truncate(n);
-        download.remaining -= n as i64;
-        Ok(buf)
-    }
-
-    pub fn finish_download(&self, transfer_id: &str) -> thrift::Result<()> {
-        self.downloads.lock().unwrap().remove(transfer_id);
-        log::info!("Finished download id={}", transfer_id);
-        Ok(())
+async fn copy_chunks(input: &mut Streaming<WriteStreamInput>, file: &mut tokio::fs::File, path: &str) -> AgentResult<()> {
+    loop {
+        match input.message().await {
+            Ok(Some(WriteStreamInput {
+                input: Some(Input::Data(data)),
+            })) => file
+                .write_all(&data)
+                .await
+                .map_err(|e| io_err(format!("Failed to write '{}'", path), e))?,
+            Ok(Some(_)) => {}
+            Ok(None) => {
+                return file
+                    .flush()
+                    .await
+                    .map_err(|e| io_err(format!("Failed to write '{}'", path), e));
+            }
+            Err(status) => {
+                return Err(AgentError::Failed(format!(
+                    "Write of '{}' was cancelled: {}",
+                    path,
+                    status.message()
+                )));
+            }
+        }
     }
 }

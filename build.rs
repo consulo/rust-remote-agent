@@ -12,43 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::process::Command;
-use std::path::Path;
-
-fn main() {
-    let thrift_file = "thrift/remote_agent.thrift";
-    let out_dir = "src/generated";
-
-    println!("cargo:rerun-if-changed={}", thrift_file);
-
-    if !Path::new(thrift_file).exists() {
-        panic!("Thrift IDL file not found: {}", thrift_file);
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let protoc = protoc_bin_vendored::protoc_bin_path()?;
+    // SAFETY: build scripts run single-threaded
+    unsafe {
+        std::env::set_var("PROTOC", protoc);
     }
 
-    // Try to run thrift compiler
-    let status = Command::new("thrift")
-        .args([
-            "--gen", "rs",
-            "-out", out_dir,
-            thrift_file,
-        ])
-        .status();
-
-    match status {
-        Ok(s) if s.success() => {
-            println!("cargo:warning=Thrift code generated successfully");
-        }
-        Ok(s) => {
-            println!(
-                "cargo:warning=Thrift compiler exited with: {}. Using pre-generated code.",
-                s
-            );
-        }
-        Err(e) => {
-            println!(
-                "cargo:warning=Thrift compiler not found ({}). Using pre-generated code.",
-                e
-            );
-        }
-    }
+    println!("cargo:rerun-if-changed=proto/remote_agent.proto");
+    tonic_prost_build::configure()
+        .build_client(false)
+        .compile_protos(&["proto/remote_agent.proto"], &["proto"])?;
+    Ok(())
 }

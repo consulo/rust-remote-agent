@@ -1,17 +1,27 @@
 [package]
 name = "remote-agent"
-version = "0.10.0"
+version = "0.11.0"
 edition = "2024"
 license = "Apache-2.0"
 
 [dependencies]
-thrift = "0.17"
-clap = { version = "4", features = ["derive"] }
+tonic = { version = "0.14", features = ["tls-ring"] }
+tonic-prost = "0.14"
+prost = "0.14"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "net", "time", "signal", "fs"] }
+tokio-stream = { version = "0.1", features = ["net"] }
+clap = { version = "4", features = ["derive", "env"] }
 log = "0.4"
 env_logger = "0.11"
-ordered-float = "4"
 ureq = "3"
-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
+rcgen = "0.14"
+rustls-pki-types = "1"
+sha2 = "0.10"
+tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[build-dependencies]
+tonic-prost-build = "0.14"
+protoc-bin-vendored = "3"

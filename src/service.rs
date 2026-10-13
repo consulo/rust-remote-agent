@@ -12,16 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
+use std::pin::Pin;
 
-use crate::generated::remote_agent::*;
+use tokio::sync::mpsc;
+use tokio_stream::Stream;
+use tokio_stream::wrappers::ReceiverStream;
+use tonic::{Request, Response, Status, Streaming};
+
+use crate::error::{AgentError, AgentResult, agent_err};
 use crate::handler;
+use crate::proto::exec_input::Input as ExecInputKind;
+use crate::proto::remote_agent_service_server::RemoteAgentService;
+use crate::proto::web_socket_input::Input as WebSocketInputKind;
+use crate::proto::*;
 
 const ALL_GROUPS: &[&str] = &["fs", "process", "http", "websocket", "userinfo", "stat"];
+const STREAM_BUFFER: usize = 64;
 
-fn agent_err(msg: String) -> thrift::Error {
-    thrift::Error::User(Box::new(AgentException::new(msg)))
-}
+type EventStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
 
 pub struct Permissions {
     all: bool,
@@ -49,14 +58,14 @@ impl Permissions {
         }
     }
 
-    fn check(&self, group: &str) -> thrift::Result<()> {
+    pub fn check(&self, group: &str) -> AgentResult<()> {
         if self.all || self.groups.contains(group) {
             Ok(())
         } else {
-            Err(thrift::Error::User(Box::new(PermissionException::new(
-                format!("Permission denied: '{}' not in --permissions", group),
-                group.to_string(),
-            ))))
+            Err(AgentError::Permission {
+                message: format!("Permission denied: '{}' not in --permissions", group),
+                permission: group.to_string(),
+            })
         }
     }
 
@@ -84,241 +93,235 @@ impl Permissions {
         }
     }
 }
-
-pub struct AgentServiceHandler {
+pub struct AgentService {
     workspace: String,
     permissions: Permissions,
     process_manager: handler::process::ProcessManager,
-    transfer_manager: handler::transfer::TransferManager,
-    ws_manager: handler::websocket::WebSocketManager,
 }
 
-impl AgentServiceHandler {
+impl AgentService {
     pub fn new(workspace: String, permissions: Permissions) -> Self {
-        AgentServiceHandler {
+        AgentService {
             workspace,
             permissions,
             process_manager: handler::process::ProcessManager::new(),
-            transfer_manager: handler::transfer::TransferManager::new(),
-            ws_manager: handler::websocket::WebSocketManager::new(),
         }
     }
 }
 
-impl RemoteAgentServiceSyncHandler for AgentServiceHandler {
-    // --- Agent Identity (no permission check) ---
+async fn blocking<T, F>(task: F) -> Result<Response<T>, Status>
+where
+    T: Send + 'static,
+    F: FnOnce() -> AgentResult<T> + Send + 'static,
+{
+    tokio::task::spawn_blocking(task)
+        .await
+        .map_err(|e| Status::internal(format!("Agent task failed: {}", e)))?
+        .map(Response::new)
+        .map_err(Status::from)
+}
 
-    fn handle_get_agent_info(&self) -> thrift::Result<AgentInfo> {
-        Ok(AgentInfo::new(
-            "rust-remote-agent".to_string(),
-            env!("CARGO_PKG_VERSION").to_string(),
-            self.permissions.to_list(),
-        ))
+fn stream<T: Send + 'static>(receiver: mpsc::Receiver<Result<T, Status>>) -> Response<EventStream<T>> {
+    Response::new(Box::pin(ReceiverStream::new(receiver)))
+}
+
+#[tonic::async_trait]
+impl RemoteAgentService for AgentService {
+    async fn get_agent_info(&self, _request: Request<Empty>) -> Result<Response<AgentInfo>, Status> {
+        Ok(Response::new(AgentInfo {
+            agent_id: "rust-remote-agent".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            permissions: self.permissions.to_list(),
+        }))
     }
 
-    // --- Workspace (no permission check) ---
-
-    fn handle_get_workspace_path(&self) -> thrift::Result<String> {
-        Ok(self.workspace.clone())
+    async fn get_workspace_path(&self, _request: Request<Empty>) -> Result<Response<WorkspacePath>, Status> {
+        Ok(Response::new(WorkspacePath {
+            path: self.workspace.clone(),
+        }))
     }
 
-    // --- Process Management (permission: process) ---
-
-    fn handle_start_process(
-        &self,
-        command: String,
-        arguments: Vec<String>,
-        working_directory: String,
-        environment: BTreeMap<String, String>,
-    ) -> thrift::Result<ProcessInfo> {
-        self.permissions.check("process")?;
-        self.process_manager
-            .start_process(command, arguments, working_directory, environment)
+    async fn get_env_variable(&self, request: Request<EnvVariableRequest>) -> Result<Response<EnvVariable>, Status> {
+        Ok(Response::new(EnvVariable {
+            value: handler::env::get_env_variable(&request.into_inner().name),
+        }))
     }
 
-    fn handle_kill_process(&self, pid: i64, force: bool) -> thrift::Result<bool> {
-        self.permissions.check("process")?;
-        self.process_manager.kill_process(pid, force)
+    async fn get_env_variables(&self, _request: Request<Empty>) -> Result<Response<EnvVariables>, Status> {
+        Ok(Response::new(EnvVariables {
+            variables: handler::env::get_env_variables().into_iter().collect(),
+        }))
     }
 
-    fn handle_is_process_alive(&self, pid: i64) -> thrift::Result<bool> {
-        self.permissions.check("process")?;
-        Ok(self.process_manager.is_alive(pid))
+    async fn get_system_info(&self, _request: Request<Empty>) -> Result<Response<SystemInfo>, Status> {
+        blocking(|| Ok(handler::env::get_system_info())).await
     }
 
-    fn handle_list_processes(&self) -> thrift::Result<Vec<ProcessInfo>> {
-        self.permissions.check("process")?;
-        Ok(self.process_manager.list_processes())
-    }
-
-    fn handle_read_process_output(&self, pid: i64) -> thrift::Result<ProcessOutput> {
-        self.permissions.check("process")?;
-        self.process_manager.read_output(pid)
-    }
-
-    // --- File Operations (permission: fs) ---
-
-    fn handle_read_file(&self, path: String) -> thrift::Result<Vec<u8>> {
-        self.permissions.check("fs")?;
-        handler::file::read_file(&path)
-    }
-
-    fn handle_write_file(&self, path: String, data: Vec<u8>) -> thrift::Result<()> {
-        self.permissions.check("fs")?;
-        handler::file::write_file(&path, &data)
-    }
-
-    fn handle_delete_file(&self, path: String) -> thrift::Result<bool> {
-        self.permissions.check("fs")?;
-        handler::file::delete_file(&path)
-    }
-
-    fn handle_list_directory(&self, path: String) -> thrift::Result<Vec<FileInfo>> {
-        self.permissions.check("fs")?;
-        handler::file::list_directory(&path)
-    }
-
-    fn handle_file_exists(&self, path: String) -> thrift::Result<bool> {
-        self.permissions.check("fs")?;
-        Ok(handler::file::file_exists(&path))
-    }
-
-    fn handle_create_directory(&self, path: String, recursive: bool) -> thrift::Result<()> {
-        self.permissions.check("fs")?;
-        handler::file::create_directory(&path, recursive)
-    }
-
-    fn handle_list_roots(&self) -> thrift::Result<Vec<FileInfo>> {
-        self.permissions.check("fs")?;
-        Ok(handler::file::list_roots())
-    }
-
-    fn handle_set_permissions(&self, path: String, mode: i32) -> thrift::Result<bool> {
-        self.permissions.check("fs")?;
-        handler::file::set_permissions(&path, mode)
-    }
-
-    // --- File Transfer (permission: fs) ---
-
-    fn handle_begin_upload(&self, path: String, file_size: i64) -> thrift::Result<String> {
-        self.permissions.check("fs")?;
-        self.transfer_manager.begin_upload(path, file_size)
-    }
-
-    fn handle_upload_chunk(&self, transfer_id: String, data: Vec<u8>) -> thrift::Result<()> {
-        self.permissions.check("fs")?;
-        self.transfer_manager.upload_chunk(&transfer_id, &data)
-    }
-
-    fn handle_finish_upload(&self, transfer_id: String) -> thrift::Result<()> {
-        self.permissions.check("fs")?;
-        self.transfer_manager.finish_upload(&transfer_id)
-    }
-
-    fn handle_cancel_upload(&self, transfer_id: String) -> thrift::Result<()> {
-        self.permissions.check("fs")?;
-        self.transfer_manager.cancel_upload(&transfer_id)
-    }
-
-    fn handle_begin_download(&self, path: String) -> thrift::Result<DownloadInfo> {
-        self.permissions.check("fs")?;
-        self.transfer_manager.begin_download(&path)
-    }
-
-    fn handle_download_chunk(&self, transfer_id: String, chunk_size: i32) -> thrift::Result<Vec<u8>> {
-        self.permissions.check("fs")?;
-        self.transfer_manager.download_chunk(&transfer_id, chunk_size)
-    }
-
-    fn handle_finish_download(&self, transfer_id: String) -> thrift::Result<()> {
-        self.permissions.check("fs")?;
-        self.transfer_manager.finish_download(&transfer_id)
-    }
-
-    // --- Environment / System Info (no permission check) ---
-
-    fn handle_get_env_variable(&self, name: String) -> thrift::Result<String> {
-        Ok(handler::env::get_env_variable(&name))
-    }
-
-    fn handle_get_env_variables(&self) -> thrift::Result<BTreeMap<String, String>> {
-        Ok(handler::env::get_env_variables())
-    }
-
-    fn handle_get_system_info(&self) -> thrift::Result<SystemInfo> {
-        Ok(handler::env::get_system_info())
-    }
-
-    // --- Stat (permission: stat) ---
-
-    fn handle_get_stat(&self) -> thrift::Result<StatInfo> {
+    async fn get_stat(&self, _request: Request<Empty>) -> Result<Response<StatInfo>, Status> {
         self.permissions.check("stat")?;
-        Ok(handler::env::get_stat())
+        blocking(|| Ok(handler::env::get_stat())).await
     }
 
-    // --- User Info (permission: userinfo) ---
-
-    fn handle_get_user_info(&self) -> thrift::Result<UserInfo> {
+    async fn get_user_info(&self, _request: Request<Empty>) -> Result<Response<UserInfo>, Status> {
         self.permissions.check("userinfo")?;
-        Ok(handler::env::get_user_info())
+        Ok(Response::new(handler::env::get_user_info()))
     }
 
-    // --- HTTP Client (permission: http) ---
-
-    fn handle_execute_http_request(
-        &self,
-        request: HttpRequest,
-    ) -> thrift::Result<HttpResponse> {
-        self.permissions.check("http")?;
-        handler::http::execute_http_request(request)
-    }
-
-    // --- WebSocket Proxy (permission: websocket) ---
-
-    fn handle_connect_web_socket(
-        &self,
-        url: String,
-        headers: BTreeMap<String, String>,
-    ) -> thrift::Result<String> {
-        self.permissions.check("websocket")?;
-        self.ws_manager.connect(url, headers)
-    }
-
-    fn handle_read_web_socket_data(
-        &self,
-        session_id: String,
-    ) -> thrift::Result<WebSocketData> {
-        self.permissions.check("websocket")?;
-        self.ws_manager.read_data(&session_id)
-    }
-
-    fn handle_send_web_socket_data(
-        &self,
-        session_id: String,
-        binary_data: Vec<u8>,
-        text_data: String,
-    ) -> thrift::Result<()> {
-        self.permissions.check("websocket")?;
-        if !binary_data.is_empty() {
-            self.ws_manager.send_binary(&session_id, binary_data)
-        } else {
-            self.ws_manager.send_text(&session_id, text_data)
-        }
-    }
-
-    fn handle_close_web_socket(
-        &self,
-        session_id: String,
-    ) -> thrift::Result<()> {
-        self.permissions.check("websocket")?;
-        self.ws_manager.close(&session_id)
-    }
-
-    // --- Utility (no permission check) ---
-
-    fn handle_find_free_port(&self) -> thrift::Result<i32> {
+    async fn find_free_port(&self, _request: Request<Empty>) -> Result<Response<FreePort>, Status> {
         let listener = std::net::TcpListener::bind("127.0.0.1:0")
-            .map_err(|e| agent_err(format!("Failed to find free port: {}", e)))?;
-        Ok(listener.local_addr().unwrap().port() as i32)
+            .map_err(|e| Status::from(agent_err(format!("Failed to find free port: {}", e))))?;
+        let port = listener
+            .local_addr()
+            .map_err(|e| Status::from(agent_err(format!("Failed to find free port: {}", e))))?
+            .port();
+        Ok(Response::new(FreePort { port: port as i32 }))
+    }
+
+    type ExecStream = EventStream<ExecEvent>;
+
+    async fn exec(&self, request: Request<Streaming<ExecInput>>) -> Result<Response<Self::ExecStream>, Status> {
+        self.permissions.check("process")?;
+        let mut input = request.into_inner();
+        let start = match input.message().await? {
+            Some(ExecInput {
+                input: Some(ExecInputKind::Start(start)),
+            }) => start,
+            _ => {
+                return Err(AgentError::InvalidArgument("The first message of exec must be start".to_string()).into());
+            }
+        };
+
+        let (sender, receiver) = mpsc::channel(STREAM_BUFFER);
+        self.process_manager.exec(start, input, sender)?;
+        Ok(stream(receiver))
+    }
+
+    async fn kill_process(&self, request: Request<KillRequest>) -> Result<Response<KillResult>, Status> {
+        self.permissions.check("process")?;
+        let request = request.into_inner();
+        Ok(Response::new(KillResult {
+            killed: self.process_manager.kill_process(request.pid, request.force),
+        }))
+    }
+
+    async fn list_processes(&self, _request: Request<Empty>) -> Result<Response<ProcessList>, Status> {
+        self.permissions.check("process")?;
+        Ok(Response::new(ProcessList {
+            processes: self.process_manager.list_processes(),
+        }))
+    }
+
+    async fn read_file(&self, request: Request<PathRequest>) -> Result<Response<FileContent>, Status> {
+        self.permissions.check("fs")?;
+        let path = request.into_inner().path;
+        blocking(move || handler::file::read_file(&path).map(|data| FileContent { data })).await
+    }
+
+    async fn write_file(&self, request: Request<WriteFileRequest>) -> Result<Response<Empty>, Status> {
+        self.permissions.check("fs")?;
+        let request = request.into_inner();
+        blocking(move || handler::file::write_file(&request.path, &request.data).map(|()| Empty {})).await
+    }
+
+    type ReadFileStreamStream = EventStream<FileContent>;
+
+    async fn read_file_stream(
+        &self,
+        request: Request<ReadStreamRequest>,
+    ) -> Result<Response<Self::ReadFileStreamStream>, Status> {
+        self.permissions.check("fs")?;
+        let request = request.into_inner();
+        let file = handler::transfer::open_for_read(&request.path).await?;
+        let (sender, receiver) = mpsc::channel(4);
+        tokio::spawn(handler::transfer::read_stream(file, request.path, request.chunk_size, sender));
+        Ok(stream(receiver))
+    }
+
+    async fn write_file_stream(&self, request: Request<Streaming<WriteStreamInput>>) -> Result<Response<Empty>, Status> {
+        self.permissions.check("fs")?;
+        handler::transfer::write_stream(request.into_inner()).await?;
+        Ok(Response::new(Empty {}))
+    }
+
+    async fn delete_file(&self, request: Request<PathRequest>) -> Result<Response<DeleteResult>, Status> {
+        self.permissions.check("fs")?;
+        let path = request.into_inner().path;
+        blocking(move || handler::file::delete_file(&path).map(|deleted| DeleteResult { deleted })).await
+    }
+
+    async fn list_directory(&self, request: Request<PathRequest>) -> Result<Response<FileInfoList>, Status> {
+        self.permissions.check("fs")?;
+        let path = request.into_inner().path;
+        blocking(move || handler::file::list_directory(&path).map(|files| FileInfoList { files })).await
+    }
+
+    async fn file_exists(&self, request: Request<PathRequest>) -> Result<Response<ExistsResult>, Status> {
+        self.permissions.check("fs")?;
+        let path = request.into_inner().path;
+        blocking(move || {
+            Ok(ExistsResult {
+                exists: handler::file::file_exists(&path),
+            })
+        })
+        .await
+    }
+
+    async fn create_directory(&self, request: Request<CreateDirectoryRequest>) -> Result<Response<Empty>, Status> {
+        self.permissions.check("fs")?;
+        let request = request.into_inner();
+        blocking(move || handler::file::create_directory(&request.path, request.recursive).map(|()| Empty {})).await
+    }
+
+    async fn list_roots(&self, _request: Request<Empty>) -> Result<Response<FileInfoList>, Status> {
+        self.permissions.check("fs")?;
+        blocking(|| {
+            Ok(FileInfoList {
+                files: handler::file::list_roots(),
+            })
+        })
+        .await
+    }
+
+    async fn set_permissions(
+        &self,
+        request: Request<SetPermissionsRequest>,
+    ) -> Result<Response<SetPermissionsResult>, Status> {
+        self.permissions.check("fs")?;
+        let request = request.into_inner();
+        blocking(move || {
+            handler::file::set_permissions(&request.path, request.mode).map(|changed| SetPermissionsResult { changed })
+        })
+        .await
+    }
+
+    async fn execute_http_request(&self, request: Request<HttpRequest>) -> Result<Response<HttpResponse>, Status> {
+        self.permissions.check("http")?;
+        let request = request.into_inner();
+        blocking(move || handler::http::execute_http_request(request)).await
+    }
+
+    type WebSocketStream = EventStream<WebSocketEvent>;
+
+    async fn web_socket(
+        &self,
+        request: Request<Streaming<WebSocketInput>>,
+    ) -> Result<Response<Self::WebSocketStream>, Status> {
+        self.permissions.check("websocket")?;
+        let mut input = request.into_inner();
+        let connect = match input.message().await? {
+            Some(WebSocketInput {
+                input: Some(WebSocketInputKind::Connect(connect)),
+            }) => connect,
+            _ => {
+                return Err(AgentError::InvalidArgument("The first message of web_socket must be connect".to_string()).into());
+            }
+        };
+
+        let socket = tokio::task::spawn_blocking(move || handler::websocket::connect(connect))
+            .await
+            .map_err(|e| Status::internal(format!("Agent task failed: {}", e)))??;
+        let (sender, receiver) = mpsc::channel(STREAM_BUFFER);
+        handler::websocket::run(socket, input, sender);
+        Ok(stream(receiver))
     }
 }
